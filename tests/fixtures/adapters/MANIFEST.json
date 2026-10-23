@@ -1,0 +1,34 @@
+{
+ "8NIQ001.htm": {
+  "sha256": "e79313d6cd32f3d30723e9bd65b3256fe470e3cc5178ecee6243eeb6d8dd1325",
+  "from": "work/cache/neocp/mpecs/"
+ },
+ "8NIQ001.txt": {
+  "sha256": "c1173084eca9e0ece3ae536628bbea87825fc21918572001e359502ab64ed567",
+  "from": "work/cache/neocp/obs/"
+ },
+ "8NIQ001_page.json": {
+  "sha256": "487394ebe7f484ff29f1ab6d7968e05ad1697edd72c9930aa0eeac5f97aaa9bf",
+  "from": "work/cache/neocp/parsed.json objects.8NIQ001.mpec"
+ },
+ "gp_sample.json": {
+  "sha256": "3017cf31b0e1378059f247917dc1c3aee14758bcebd74f822c033fcf6130e4bc",
+  "from": "work/cache/gp/20261021T145633Z (newest set of 7 objects via cle.adapters.gp.records)"
+ },
+ "hz_139479_2025-01-05_2025-01-19_1h.json": {
+  "sha256": "f0c463f55e65a69fef0042a5f04fd56adec3fc31935a1f193688b919121f66b7",
+  "from": "work/cache/bgtle/hz/"
+ },
+ "hz_151_2026-10-06_2026-11-05_1h.json": {
+  "sha256": "cb2aa3247fb45dc9e6f04a491b59ac3e6e7cb1bd75dd620972cce9e73d79d630",
+  "from": "work/cache/nbody_check/"
+ },
+ "hz_463_2026-06-22_2026-07-06_1h.json": {
+  "sha256": "9a46c4f343bc2178f3478bfa0935a6d95c470eee4df34a282f9f93a0ae92c7b4",
+  "from": "work/cache/bgtle/hz/"
+ },
+ "hz_95_2026-10-06_2026-11-05_1h.json": {
+  "sha256": "3afb8c5e1b7d15e982e57cd832ff9a751d94487d38c894fad956d76a7de010e3",
+  "from": "work/cache/nbody_check/"
+ }
+}

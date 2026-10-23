@@ -1,0 +1,22 @@
+/* Colour tokens only (review V3; inlined after the template's <style> by scripts/build_site.mjs; the template keeps no colours).
+   Series colours (the seven regime families) live in src/cle/catalog.py REGIMES and reach the page through catalog.js;
+   the tokens here are the status, reference and chrome colours that must not impersonate a series. Validated on #04060c
+   by tests/palette.test.mjs: every family ≥ 8 ΔE (normal and CVD) from --sun, --lagrange and the star grey, ≥ 8 normal
+   from --cyan and --sightline (CVD too for the Earth-centred families); --warn is apricot, not yellow; --live is the UI
+   accent, so red belongs to no status. */
+:root{
+  --surface:#04060c;--bg:#101418;--panel:#171c22;--raised:#1e2630;--ink:#e8eaed;--dim:#a9b3bf;--muted:#818e9e;--line:#303b47;
+  --accent:#3987e5;--accent-soft:#a1d4fc;--focus:#b3d9ff;--moon:#c1c7ce;
+  --sun:#ffd54f;            /* Sun 0° terminator + Sun glyph (ift14_style.SUN), fixed convention */
+  --cyan:#4fc3f7;           /* Sun −12° ring (ift14_style.ACCENT), fixed convention */
+  --warn:#fcc598;           /* ⚠ caveats, stale, extrap badges: apricot, ≥ 8 ΔE from SE-L1 gold, --sun and the star grey */
+  --warn-bg:#2a1f18;--warn-line:#6e5241;--warn-line-soft:#4a3829;
+  --live:#a1d4fc;           /* LIVE badge and button: the pressed-button accent */
+  --lagrange:#ffe9a6;       /* ◈ Lagrange glyphs, labels, chevrons: pale gold, ≥ 8 ΔE from the star grey and every family */
+  --hairline:#e8eaed;       /* NEOCP tracklet hairline: ink, not a second yellow next to --sun (not in the station bead cycle) */
+  --sightline:#a1d4fc;      /* station → bead sight lines */
+  --star:#d6d6d6;           /* star core, pure grey (web/sky-style.js starCore) */
+  --chip-on:#213044;--row-sel:#1d2a3a;--sel-ink:#ffffff;--q-gp:#b0bec5;--q-fit:#a5d6a7;--natural:#cfd8dc;--constellation:#5a7bb8;
+  --bead:#f48fb1;           /* legend bead: the first station colour (web/ui/theme.js STATION_COLORS[0]), not the sight-line blue */
+  --scrim:rgba(4,6,12,.72);--tooltip-bg:rgba(11,16,24,.93);
+}

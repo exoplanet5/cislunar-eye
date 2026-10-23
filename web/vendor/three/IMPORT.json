@@ -1,0 +1,145 @@
+{
+ "mmx": "/Users/mickey/solarsystem/MMX",
+ "mmx_commit": "8c6010674b47c9754fbdca10dc9dabba26453678",
+ "imported_utc": "2026-10-22T12:59:03Z",
+ "three": "r170",
+ "files": [
+  {
+   "dst": "web/vendor/three/three.module.min.js",
+   "src": "web/vendor/three/three.module.min.js",
+   "sha256": "08fd7545d13d2c7fb65ab691530a802dafefd638596501854f267d0fb13c39e7",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/LICENSE",
+   "src": "web/vendor/three/LICENSE",
+   "sha256": "4c40a1ef62450b857c3b2aaf294936304cd552d965fbcd9d32d4c5bcf4ba4454",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/addons/controls/OrbitControls.js",
+   "src": "web/vendor/three/addons/controls/OrbitControls.js",
+   "sha256": "80efaadea4f8a636a65fb0bd08bfef62f3d93a0bb94e2e7500f23176c5c07f4e",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/addons/lines/Line2.js",
+   "src": "web/vendor/three/addons/lines/Line2.js",
+   "sha256": "f926f3c903983abbf10e7a30dc5908df71dc6a20117eb67f0f758344d4a76f93",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/addons/lines/LineGeometry.js",
+   "src": "web/vendor/three/addons/lines/LineGeometry.js",
+   "sha256": "b7e1952c8891dc7840a9119ce03eeb547825663c831851bd73baf305d4c61c46",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/addons/lines/LineMaterial.js",
+   "src": "web/vendor/three/addons/lines/LineMaterial.js",
+   "sha256": "4a58808a6e3a48f2a98eb2a410022ae648f801eaae89d457fcd662b077a7cf27",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/addons/lines/LineSegments2.js",
+   "src": "web/vendor/three/addons/lines/LineSegments2.js",
+   "sha256": "9dcce823f86d7f00c4faa8c80ea3833fa86bf4957f394a1f64f3b126f6eea661",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/addons/lines/LineSegmentsGeometry.js",
+   "src": "web/vendor/three/addons/lines/LineSegmentsGeometry.js",
+   "sha256": "213a12e0e1ea878495d4998817cb83b1945441f19194267dba108c3a9e8f31ac",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/three/addons/renderers/CSS2DRenderer.js",
+   "src": "web/vendor/three/addons/renderers/CSS2DRenderer.js",
+   "sha256": "7de0bb70e3c1d6da58416353ed7140a7a7743ece99d73b56eb62bc2dd79bfed5",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/STARSHIP_LICENSE",
+   "src": "web/vendor/STARSHIP_LICENSE",
+   "sha256": "add124d41a5db54d8e6f51e12aa95479c3237d371696b5ff7c93217650e8cf9b",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/vendor/CELESTIAL_LICENSE",
+   "src": "web/vendor/CELESTIAL_LICENSE",
+   "sha256": "221e8ff1505d1e70f60234e7d809c67a8729b78ac27ae8645e3e15abbb22b612",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/assets/stars.json",
+   "src": "web/assets/stars.json",
+   "sha256": "d538a0511bcfdab706eb5fb07ff8eef8c16b2598b20267e7b6bbd145c4ef2954",
+   "mode": "copy"
+  },
+  {
+   "dst": "web/states.js",
+   "src": "web/states.js",
+   "src_sha256": "d0ecb371f9e4461ef30582a9355eae875505453ed45e77b6ed84e627b406bad8",
+   "mode": "derived"
+  },
+  {
+   "dst": "web/sky.js",
+   "src": "web/sky.js",
+   "src_sha256": "e4cb82acf0c4b204025cdbc96e43b82d3dda35d3836093067bf5196c9bfecba6",
+   "mode": "derived"
+  },
+  {
+   "dst": "web/sky-style.js",
+   "src": "web/sky-style.js",
+   "src_sha256": "12c2409788a6fbb794d355426501433c09d9f472a0ac944aa05cc39b3ae77cad",
+   "mode": "derived"
+  },
+  {
+   "dst": "web/index.template.html",
+   "src": "web/index.template.html",
+   "src_sha256": "7a5502e6b2e2238676cb4ebbb8adb16fca66eda1e8714e4b66393c812b50bcfa",
+   "mode": "derived"
+  },
+  {
+   "dst": "scripts/build_site.mjs",
+   "src": "scripts/build_site.mjs",
+   "src_sha256": "cbb53d934d973dfd930564a476f846008dde7ffffd487eee8f43021608c00380",
+   "mode": "derived"
+  },
+  {
+   "dst": "web/scene/trailMaterial.js",
+   "src": "web/vendor/three/addons/lines/LineMaterial.js",
+   "src_sha256": "4a58808a6e3a48f2a98eb2a410022ae648f801eaae89d457fcd662b077a7cf27",
+   "mode": "derived"
+  },
+  {
+   "dst": "tests/browser.mjs",
+   "src": "tests/browser.mjs",
+   "src_sha256": "798cc9066416eaef9cc8e88ad87c5b2e7e706869a35122a64c80c5685244dfc7",
+   "mode": "derived"
+  },
+  {
+   "dst": "web/assets/hipparcos.json",
+   "src": "web/assets/hipparcos.json",
+   "src_sha256": "9f4e70f9638d6395006087d365bcf6d4a609a8e3c9071a1f65be80e4e6bfe7f6",
+   "sha256": "213146ac1456f50eb4f4be1b3c6c7d9e9863b36e6d0b515bf8d3757e285b0037",
+   "mode": "packed",
+   "method": "scripts/pack_stars.py: ra uint16 / dec int16 at 0.00549316 deg, mag int16 millimag, base64 LE"
+  },
+  {
+   "dst": "web/assets/earth_4096.jpg",
+   "src": "/Users/mickey/sda/basemaps/world.topo.bathy.200409.3x21600x10800.jpg",
+   "src_sha256": "863036b622ba3dab4eb4ffb7149730b02cfa433ce49672e9b7267022051e04a2",
+   "sha256": "5d8c6c23f125143314f231f52bf0dfc4a2ff2d3cee155d4306b239bb3b4ec444",
+   "mode": "generated",
+   "method": "Pillow LANCZOS 4096x2048, JPEG q85"
+  },
+  {
+   "dst": "web/assets/moon_4096.jpg",
+   "src": "/Users/mickey/ciscluar/lunarmission/moon_wac_z3.jpg",
+   "sha256": "30cfa50c0889dd0c2ec8d2fc5805150a8da2fb3efb3cb0496f4e84ad516f0c39",
+   "mode": "copy",
+   "method": "LROC WAC global mosaic, verbatim"
+  }
+ ]
+}

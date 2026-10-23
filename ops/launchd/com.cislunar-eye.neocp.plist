@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- cislunar-eye hourly NEOCP refresh: ops/run.sh update-neocp at hh:45 (after Bill Gray's hh:35 regeneration).
+     Template; not loaded automatically (ARCHITECTURE.md Q8). Install: make install-launchd. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cislunar-eye.neocp</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/mickey/ciscluar/cislunar-eye/ops/run.sh</string>
+    <string>update-neocp</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/mickey/ciscluar/cislunar-eye</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Minute</key>
+    <integer>45</integer>
+  </dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/mickey</string>
+    <key>LANG</key>
+    <string>en_US.UTF-8</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/mickey/ciscluar/cislunar-eye/work/logs/launchd-neocp.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/mickey/ciscluar/cislunar-eye/work/logs/launchd-neocp.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Nice</key>
+  <integer>5</integer>
+</dict>
+</plist>

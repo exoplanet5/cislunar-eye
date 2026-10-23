@@ -1,0 +1,101 @@
+cid	tier	name	kind	verdict	detail
+artemis-p1	1	ARTEMIS P1 (THEMIS-B)	horizons	ok	
+artemis-p2	1	ARTEMIS P2 (THEMIS-C)	horizons	ok	
+chandrayaan-2-orbiter	1	Chandrayaan-2 orbiter	horizons	ok	
+danuri	1	Danuri (KPLO)	horizons	ok	
+lro	1	LRO	horizons	ok	
+queqiao-2	1	Queqiao-2		ok	listed, not drawn (no ephemeris, by decision)
+tiandu-2	1	Tiandu-2		ok	listed, not drawn (no ephemeris, by decision)
+dro-a	1	DRO-A	spacetrack_gp	ok	r(now)=446200 km, GP 2026-10-12
+dro-b	1	DRO-B	spacetrack_gp	ok	r(now)=247380 km, GP 2026-09-21
+queqiao-1	1	Queqiao-1		ok	listed, not drawn (no ephemeris, by decision)
+tess	1	TESS	horizons	ok	
+astron	1	Astron	spacetrack_gp	ok	r(now)=114112 km, GP 2026-10-13
+astron-proton-blok-dm-stage	1	Astron Proton Blok DM stage	spacetrack_gp	ok	r(now)=59006 km, GP 2026-10-08
+beidou-yuanzheng-1-y1-upper-stage	1	BeiDou Yuanzheng-1 Y1 upper stage	spacetrack_gp	ok	r(now)=168204 km, GP 2026-10-22
+capstone	1	CAPSTONE	pluto_mpec	ok	
+chandra-x-ray-observatory	1	Chandra X-ray Observatory	horizons	ok	
+change-3-cz-3b-y23-stage-3	1	Chang'e 3 CZ-3B Y23 stage 3	spacetrack_gp	ok	r(now)=472672 km, GP 2026-10-13
+change-6-orbiter	1	Chang'e-6 orbiter	neocpsat_fit	ok	
+geotail	1	Geotail	spacetrack_gp	ok	r(now)=143267 km, GP 2026-10-25
+ibex	1	IBEX	bgtle	ok	
+imp-7	1	IMP-7	spacetrack_gp	ok	r(now)=276079 km, GP 2026-06-25
+integral	1	INTEGRAL	horizons	ok	
+mms-1	1	MMS-1	horizons	ok	
+mms-2	1	MMS-2	horizons	ok	
+mms-3	1	MMS-3	horizons	ok	
+mms-4	1	MMS-4	horizons	ok	
+multijunk	1	Multijunk (C1AUGE1)	neocpsat_fit	ok	
+prognoz-6-blok-so-l-stage	1	Prognoz-6 Blok SO-L stage	spacetrack_gp	ok	r(now)=56931 km, GP 2026-10-17
+solrad-11-debris	1	SOLRAD 11 debris	spacetrack_gp	ok	r(now)=128369 km, GP 2026-10-25
+solrad-11a	1	SOLRAD 11A	spacetrack_gp	ok	r(now)=125413 km, GP 2026-10-14
+solrad-11a-b-pkm	1	SOLRAD 11A/B PKM	spacetrack_gp	ok	r(now)=65612 km, GP 2026-09-07
+spektr-r	1	Spektr-R (RadioAstron)	horizons	ok	
+tiandu-1	1	Tiandu-1	neocpsat_fit	ok	
+vela-1a	1	Vela 1A	spacetrack_gp	ok	r(now)=192743 km, GP 2026-08-12
+vela-1b	1	Vela 1B	spacetrack_gp	ok	r(now)=171838 km, GP 2026-09-03
+vela-2a	1	Vela 2A	spacetrack_gp	ok	r(now)=142410 km, GP 2026-10-15
+vela-2b	1	Vela 2B	spacetrack_gp	ok	r(now)=80456 km, GP 2026-10-24
+vela-3a	1	Vela 3A	spacetrack_gp	ok	r(now)=178248 km, GP 2026-09-30
+vela-3b	1	Vela 3B	spacetrack_gp	ok	r(now)=135197 km, GP 2026-10-24
+vela-4a	1	Vela 4A	spacetrack_gp	ok	r(now)=120669 km, GP 2026-10-15
+ops-6679	1	Vela 4B (OPS 6679)	spacetrack_gp	ok	r(now)=82714 km, GP 2026-10-21
+vela-5a	1	Vela 5A	spacetrack_gp	ok	r(now)=207766 km, GP 2026-08-05
+vela-5b	1	Vela 5B	spacetrack_gp	ok	r(now)=63149 km, GP 2026-08-25
+ace	1	ACE	horizons	ok	
+aditya-l1	1	Aditya-L1	horizons	ok	
+carruthers-geocorona-observatory	1	Carruthers Geocorona Observatory	horizons	ok	SATCAT DECAY 2025-09-26 = left Earth orbit (Space-Track convention), not a reentry
+dscovr	1	DSCOVR	horizons	ok	
+imap	1	IMAP	horizons	ok	SATCAT DECAY 2025-09-26 = left Earth orbit (Space-Track convention), not a reentry
+soho	1	SOHO	horizons	ok	
+solar-1	1	SOLAR-1 (SWFO-L1)	horizons	ok	SATCAT DECAY 2025-09-26 = left Earth orbit (Space-Track convention), not a reentry
+wind	1	Wind	horizons	ok	
+escapade-blue	1	ESCAPADE Blue	horizons	ok	
+escapade-gold	1	ESCAPADE Gold	horizons	ok	
+euclid	1	Euclid	horizons	ok	
+jwst	1	JWST	horizons	ok	
+nancy-grace-roman-space-telescope	1	Nancy Grace Roman Space Telescope	horizons	ok	
+spektr-rg	1	Spektr-RG	neocpsat_fit	ok	
+falcon-heavy-013-stage-2	1	Falcon Heavy-013 stage 2 (Roman launch)	neocpsat_fit	ok	
+mmx	1	MMX (Martian Moons eXploration)	horizons	ok	
+p22qgc1	1	P22qGC1 (unidentified Earth-flyby object)	neocpsat_fit	ok	
+8niq001	1	8NIQ001	pluto_mpec	ok	
+a11iiei	1	A11IIEI	pluto_mpec	ok	
+cew2vg2	1	CEW2VG2	pluto_mpec	ok	
+tko0003	1	TKO0003	pluto_mpec	ok	
+ztf10go	1	ZTF10Go	pluto_mpec	ok	
+ztf10gu	1	ZTF10Gu	pluto_mpec	ok	
+1969-046-fragment	2	1969-046 fragment (C45GF81)	bgtle	ok	
+cdt9az2	2	CDT9AZ2	bgtle	ok	
+chandrayaan-3-propulsion-module	2	Chandrayaan-3 Propulsion Module	pluto_mpec	ok	
+chimera-geo-1	2	Chimera GEO 1	bgtle	ok	
+cluster-ii-rumba	2	Cluster II Rumba (FM5)	bgtle	ok	
+cluster-ii-tango	2	Cluster II Tango	horizons	ok	
+cluster-ii-fm7	2	CLUSTER II-FM7	horizons	ok	
+falcon-9-427-stage-2	2	Falcon 9-427 stage 2 (Blue Ghost M1 launch)	horizons	ok	
+imp-8	2	IMP-8	spacetrack_gp	ok	r(now)=221594 km, GP 2026-05-27
+smile	2	SMILE	horizons	ok	
+vela-4-titan-3c-transtage-10	2	Vela 4 Titan 3C Transtage 10	horizons	ok	
+vela-5-spin-interstage	2	Vela 5 spin interstage	spacetrack_gp	ok	r(now)=117678 km, GP 2026-08-15
+vela-5-titan-3c-transtage	2	Vela 5 Titan 3C Transtage	spacetrack_gp	ok	r(now)=125916 km, GP 2026-10-22
+vela-6-titan-3c-transtage	2	Vela 6 Titan 3C Transtage	spacetrack_gp	ok	r(now)=96106 km, GP 2026-10-20
+xl8d89e	2	XL8D89E	bgtle	ok	
+xmm-newton	2	XMM-Newton	horizons	ok	
+xmm-newton-ariane-5-stage	2	XMM-Newton Ariane 5 stage	spacetrack_gp	ok	r(now)=98241 km, GP 2026-10-21
+yuanzheng-1s-y11	2	Yuanzheng-1S Y11	spacetrack_gp	ok	r(now)=69281 km, GP 2026-10-21
+artemis-ii-orion	2	Artemis II Orion (Integrity)	horizons	ok	
+cert-2-centaur-v-upper-stage	2	Cert-2 Centaur V upper stage	horizons	ok	
+lucy	2	Lucy	horizons	ok	
+osiris-apex	2	OSIRIS-APEX	horizons	ok	
+c45zjd1	2	C45ZJD1 (unidentified HEO object)	neocpsat_fit	ok	
+c466ej1	2	C466EJ1 (NEOCP geocentric, unidentified in neocpsat)	neocpsat_fit	ok	
+c466qn1	2	C466QN1 (NEOCP geocentric, unidentified in neocpsat)	neocpsat_fit	ok	
+etbo-a11dzee	2	ETBO A11DZEE (unidentified)	neocpsat_fit	ok	
+etbo-st26b21	2	ETBO ST26B21 (unidentified)	neocpsat_fit	ok	
+st26aa3	2	ST26AA3 (unidentified HEO debris)	neocpsat_fit	ok	
+vela-2b-fragment	2	Vela 2B fragment (1964-040B bit)	neocpsat_fit	ok	
+2000-sg344	2	2000 SG344	horizons	ok	
+2006-rh120	2	2006 RH120	horizons	ok	
+2008-ua202	2	2008 UA202	horizons	ok	
+2024-pt5	2	2024 PT5	horizons	ok	
+2025-pn7	2	2025 PN7	horizons	ok	

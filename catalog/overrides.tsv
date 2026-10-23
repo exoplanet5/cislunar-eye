@@ -1,0 +1,25 @@
+cid	field	value	reason
+# one row per hand correction; field = any master_list column (tier also resets tier_reason); applied after the merge			
+a11c39l	tier	3	obs file holds only redaction filler, no usable fit
+ops-6679	name	Vela 4B (OPS 6679)	SATCAT name; Vela 4B = 1967-040B
+ibex	tier	1	user 2026-10-21: show on latest orbit
+ibex	caveat	latest orbit = Bill Gray TLE fit ending 2026-01-01, integrated forward (IBEX can manoeuvre)	user 2026-10-21
+capstone	tier	1	user 2026-10-21: show on latest orbit
+capstone	caveat	latest orbit = neocpsat find_orb fit of 2026-09-12 (Horizons SPK ended 2026-08-14); derelict, integrated forward	user 2026-10-21
+queqiao-1	tier	1	user 2026-10-21: list, not drawn
+queqiao-2	tier	1	user 2026-10-21: list, not drawn
+tiandu-2	tier	1	user 2026-10-21: list, not drawn
+queqiao-1	caveat	no public ephemeris (EM-L2 halo since 2018); listed, not drawn	user 2026-10-21
+queqiao-2	caveat	no public ephemeris (lunar ELFO, 24 h); listed, not drawn	user 2026-10-21
+tiandu-2	caveat	no public ephemeris; listed, not drawn	user 2026-10-21
+change-6-orbiter	caveat	manoeuvres; each find_orb fit is coherent for about two weeks	neocpsat catalog notes
+tiandu-1	caveat	manoeuvres; each find_orb fit is coherent for about two weeks	neocpsat catalog notes
+spektr-rg	caveat	station-keeps; the latest fit drifts after the next burn	neocpsat catalog notes
+escapade-blue	regime	EARTH_NEAR_HELIO	SE-L2 loiter over; return leg to the Nov 2026 Earth flyby (Horizons: 1.26-1.35e6 km from SE-L2 in the window)
+escapade-gold	regime	EARTH_NEAR_HELIO	SE-L2 loiter over; return leg to the Nov 2026 Earth flyby
+escapade-blue	group	Earth-return / near-Earth heliocentric	follows the regime override
+escapade-gold	group	Earth-return / near-Earth heliocentric	follows the regime override
+escapade-blue	caveat	SE-L2 loiter finished; on the return leg to the Nov 2026 Earth gravity assist	Horizons -9
+escapade-gold	caveat	SE-L2 loiter finished; on the return leg to the Nov 2026 Earth gravity assist	Horizons -10
+dro-a	regime	EM_OTHER	Space-Track GP sets of 2026-09-22 and 10-12 fit one lunar-bound eccentric orbit (6,211 km rms), not a DRO
+dro-b	regime	EM_OTHER	Space-Track GP of 2026-09-21: lunar-bound eccentric orbit 10,000-42,000 km from the Moon; left its DRO in 2025
