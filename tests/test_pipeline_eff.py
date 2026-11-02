@@ -156,7 +156,7 @@ class StatesLanesTest(unittest.TestCase):
         args = SimpleNamespace(only=None, adapter=None, tier=2, fetch=False, jobs=jobs)
         with tempfile.TemporaryDirectory() as d, mock.patch.object(cli, "BUILD", Path(d)), \
                 mock.patch.object(cli, "STATES", Path(d) / "states"), mock.patch.object(cli.catalog, "targets", lambda *x, **k: self.ROWS), \
-                mock.patch("cle.adapters.dispatch", lambda r: fake), mock.patch("cle.adapters.neocp.write_json"), \
+                mock.patch("cle.adapters.dispatch", lambda r: fake), mock.patch("cle.astrometry.write_json"), \
                 contextlib.redirect_stdout(io.StringIO()) as log:
             cli.states(args, WIN, None)
             rep = json.loads((Path(d) / "states_report.json").read_text())
@@ -228,7 +228,7 @@ class StatesPoolTest(unittest.TestCase):
                 build.mkdir()
                 args = SimpleNamespace(only=None, adapter=None, tier=2, fetch=False, jobs=jobs)
                 with mock.patch.object(cli, "BUILD", build), mock.patch.object(cli, "STATES", build / "states"), \
-                        mock.patch.object(cli.catalog, "targets", lambda *x, **k: rows), mock.patch("cle.adapters.neocp.write_json"), \
+                        mock.patch.object(cli.catalog, "targets", lambda *x, **k: rows), mock.patch("cle.astrometry.write_json"), \
                         contextlib.redirect_stdout(io.StringIO()) as log:
                     cli.states(args, WIN, ctx)
                 rep = json.loads((build / "states_report.json").read_text())

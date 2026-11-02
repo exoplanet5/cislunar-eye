@@ -41,7 +41,7 @@ export function decodeTrack(track) {
 }
 
 // catalog.js sources: "kind:ref[start..end]" with a leading '*' on the primary one (cle.catalog.compact) →
-// {kind, ref, start, end, primary}; an object (fixture, neocp.js) passes through.
+// {kind, ref, start, end, primary}; an object (fixture) passes through.
 const SOURCE = /^(\*?)(\w+):(.*?)(?:\[(.*?)\.\.(.*?)\])?$/;
 export function parseSource(s) {
   if (typeof s !== 'string') return s;

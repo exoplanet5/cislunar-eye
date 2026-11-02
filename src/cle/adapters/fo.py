@@ -168,16 +168,26 @@ _hold = threading.Lock(), [0, None, 0.0]  # depth, file and summed wait (s) of t
 
 
 @contextmanager
-def locked():
+def locked(timeout=None):
     """work/fo.lock, taken once per process: nested uses and the pool threads of one hold share it, so runs stay
-    serialised against other processes (the hourly against the daily build) but one fit's pool runs together."""
+    serialised against other processes (the on-request helper against the daily build) but one fit's pool runs
+    together. timeout (s): raise TimeoutError instead of waiting longer for another process's hold."""
     mutex, st = _hold
     with mutex:
         if st[0] == 0:
             LOCK.parent.mkdir(parents=True, exist_ok=True)
-            st[1] = open(LOCK, "w")
+            f = open(LOCK, "w")
             t = time.time()
-            fcntl.flock(st[1], fcntl.LOCK_EX)
+            while True:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX if timeout is None else fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.time() - t >= timeout:
+                        f.close()
+                        raise TimeoutError(f"{LOCK.name} held by another process for > {timeout:g} s") from None
+                    time.sleep(0.2)
+            st[1] = f
             st[2] += time.time() - t
         st[0] += 1
     try:
@@ -623,9 +633,9 @@ def build(target, win, ctx):
                                   "fo_consistency": fit.consistency,
                                   "sigma_km_now": float(fit.sigma(win.now_s)) if fit.sigma else None},
                       caveat=f"find_orb refit of {fit.page.name} ({chk['n_used']}/{chk['n_obs']} obs "
-                             f"{iso(fit.first)[:10]}..{iso(fit.last)[:10]}, rms {chk['rms_arcsec']}\"); "
+                             f"{iso(fit.first)[:10]}..{iso(fit.last)[:10]}, rms {chk['rms_arcsec']}″); "
                              f"extrapolated beyond {iso(fb)[:10]}" + (f" ({dext:.0f} d to window end)" if dext > 2 else "")
-                             + (f"; misses the {iso(t_new)[:10]} astrometry by {later:.0f}\"" if later else "")
+                             + (f"; misses the {iso(t_new)[:10]} astrometry by {later:.0f}″" if later else "")
                              + (f"; {Path(ref.split('@')[0]).name} not used (weaker or unbound fit)" if swapped else "")
                              + ("; fo's epoch state integrated with Earth + Moon + Sun (fo gave no vectors)"
                                 if fit.mode == "nbody" else ""))

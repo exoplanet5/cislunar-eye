@@ -3,7 +3,10 @@
 Every file is `CLE.register("<name>", {...});`, written atomically. Arrays are base64 of little-endian
 float32/float64 (f64 when max |r| > 1e6 km, §6.2), rv interleaved per sample as x,y,z,vx,vy,vz.
 Consecutive segments joined "continuous" share their boundary sample; other joins never interpolate
-across. Tracks are clipped to the window. Moon-centred (lunar) tracks carry "center": "moon".
+across. Tracks are clipped to the window. Moon-centred (lunar) tracks carry "center": "moon". A target's NEOCP /
+neocpsat astrometry (build/tracklets.json, cle.astrometry) rides in its targets-<chunk>.js payload as "tracklets".
+The retired live-NEOCP sidecars (neocp.js, targets-neocp.js) are deleted, so neither the page nor the manifest
+sees a stale copy.
 """
 from __future__ import annotations
 
@@ -19,7 +22,7 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import brentq
 
-from . import catalog, earthrot
+from . import astrometry, catalog, earthrot
 from .context import GM_EARTH, GM_MOON, GM_SUN, MU_EM, MU_SE, RE_KM, RM_KM
 from .statetable import Segment, StateTable
 from .timeutil import iso
@@ -29,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "dist/data"
 CONTEXT_STEP_S = 3600
 F64_ABOVE_KM = 1.0e6
+RETIRED = ("neocp.js", "targets-neocp.js")       # scheduled live-NEOCP layer and its chunk (NEOCP is on request now)
 
 
 def b64(a, dtype: str) -> str:
@@ -151,24 +155,11 @@ def core(win, ctx) -> dict:
             "moon": {"radius_km": RM_KM, "track": body["moon"]}, "sun": {"track": body["sun"]}}
 
 
-def neocp(built: str) -> dict:
-    data = load_json(BUILD / "neocp.json", None)
-    if not isinstance(data, dict):
-        return {"schema": "cle/neocp@1", "built_utc": built, "neocp_snapshot_utc": None, "objects": {}, "removed": []}
-    return {"schema": "cle/neocp@1", "built_utc": built, "neocp_snapshot_utc": None, "objects": {}, "removed": []} | data
-
-
-def manifest(built: str, win, only: tuple[str, ...] = ()) -> Path:
-    """dist/data/manifest.js over every sidecar. With `only`, an existing manifest keeps its built_utc, now_utc and
-    every other file entry (§13: `export --neocp-only` touches nothing but neocp.js)."""
-    old = read_js(DIST / "manifest.js") if only else None
-    files = dict(old.get("files", {})) if old else {}
-    for p in sorted(DIST.glob("*.js")):
-        if p.name != "manifest.js" and (old is None or p.name in only):
-            files[p.name] = {"bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+def manifest(built: str, win) -> Path:
+    """dist/data/manifest.js over every sidecar."""
+    files = {p.name: {"bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+             for p in sorted(DIST.glob("*.js")) if p.name != "manifest.js"}
     head = {"schema": "cle/manifest@1", "built_utc": built, "now_utc": iso(win.now_s)}
-    if old:
-        head = {k: old.get(k, v) for k, v in head.items()}
     return write_js(DIST / "manifest.js", "manifest", head | {"files": files})
 
 
@@ -197,17 +188,12 @@ def other_window(table: StateTable, win) -> str:
     return ""
 
 
-def run(win, ctx, neocp_only: bool = False) -> dict:
+def run(win, ctx) -> dict:
     built = iso(time.time())
-    live = neocp(built)
-    write_js(DIST / "neocp.js", "neocp", live)
-    if neocp_only:
-        manifest(built, win, only=("neocp.js",))
-        return {"files": ["neocp.js"]}
     rows = catalog.targets()
     report = load_json(BUILD / "states_report.json", {})
     report = {k: {"window": report.get("window")} | v for k, v in report.get("targets", {}).items()}
-    override = {o["cid"]: o["catalog"] for o in live["objects"].values() if o.get("cid")}
+    tklets = astrometry.load(win, BUILD / "tracklets.json")      # {cid: [tracklets]} of this window only
     chunks = {c: {} for c in catalog.CHUNKS}
     entries, skipped = [], []
     for row in rows:
@@ -230,23 +216,21 @@ def run(win, ctx, neocp_only: bool = False) -> dict:
                 start, end = span(trk)
                 data = {"start_utc": start, "end_utc": end, "quality": sorted({s.quality for s in segs}), "src": sorted(trk["srcs"]),
                         "retrieved_utc": max((p.get("retrieved_utc", "") for p in table.provenance), default="")}
-                if cid not in override:          # a live NEOCP track travels in neocp.js only (the page's applyNeocp overrides)
-                    chunks[row["chunk"]][cid] = {
-                        "track": trk, "events": events(segs, win),
-                        "validation": {"midpoint_max_km": v.get("midpoint_max_km"), "midpoint_method": v.get("midpoint_method"),
-                                       "tol_km": v.get("tol_km") or TOL_KM[table.centre], "moon_check_km": None,
-                                       "regime_check": check.get("check"), "regime_pass": check.get("pass")},
-                        "caveat": table.caveat or row.get("caveat", ""), "quality_note": v.get("pred_note", ""),
-                    }                            # provenance stays in build/states/<cid>.json (§11)
+                chunks[row["chunk"]][cid] = {
+                    "track": trk, "events": events(segs, win),
+                    "validation": {"midpoint_max_km": v.get("midpoint_max_km"), "midpoint_method": v.get("midpoint_method"),
+                                   "tol_km": v.get("tol_km") or TOL_KM[table.centre], "moon_check_km": None,
+                                   "regime_check": check.get("check"), "regime_pass": check.get("pass")},
+                    "caveat": table.caveat or row.get("caveat", ""), "quality_note": v.get("pred_note", ""),
+                }                                # provenance stays in build/states/<cid>.json (§11)
+                if tklets.get(cid):              # NEOCP / neocpsat astrometry of this target (§7)
+                    chunks[row["chunk"]][cid]["tracklets"] = tklets[cid]
             else:
                 why = why or "no samples inside the window"
                 skipped.append(f"{cid}: {why}")
         e = catalog.entry(row, rnow, drawn)
         if why:
             e["not_drawn_reason"] = why
-        if drawn and cid in override:            # live NEOCP: flyby subgroup, default visibility, trail (neocp.json entry)
-            e |= {k: override[cid][k] for k in ("subgroup", "default_visible", "trail") if k in override[cid]}
-            e["chunk"] = "neocp"
         if drawn:
             e["data"] = data
         entries.append(e)
@@ -257,6 +241,9 @@ def run(win, ctx, neocp_only: bool = False) -> dict:
     for c, targets in chunks.items():
         write_js(DIST / f"targets-{c}.js", f"targets-{c}", {"schema": "cle/targets@1", "built_utc": built,
                                                             "targets": targets})
+    for name in RETIRED:
+        (DIST / name).unlink(missing_ok=True)
     manifest(built, win)
     return {"targets": len(entries), "drawn": sum(e["drawn"] for e in entries), "skipped": skipped,
-            "chunks": {c: len(t) for c, t in chunks.items()}}
+            "chunks": {c: len(t) for c, t in chunks.items()},
+            "tracklets": {cid: len(tklets[cid]) for c in chunks.values() for cid in c if cid in tklets}}

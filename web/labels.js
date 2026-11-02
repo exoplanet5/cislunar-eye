@@ -37,8 +37,9 @@ export class Labels {
     return it;
   }
 
-  // candidates: {key, text, cls, x, y, priority, always?, free?}; highest priority first, at most `cap` placed
-  // (always- and free-items, e.g. Lagrange markers, are extra).
+  // candidates: {key, text, cls, x, y, priority, always?, free?, r?}; highest priority first, at most `cap` placed
+  // (always- and free-items, e.g. Lagrange markers, are extra). r: a body's projected radius (px): its label's corner sits
+  // diagonally just outside the disc instead of on it.
   place(candidates, w, h, occupied) {
     candidates.sort((a, b) => b.priority - a.priority);
     const shown = new Set();
@@ -50,8 +51,8 @@ export class Labels {
       it.size ||= [it.el.offsetWidth, it.el.offsetHeight];
       const [width, height] = it.size;
       // always-on labels (Earth, Moon, the frame's L points, selection) get a second ring before they are forced over markers
-      const near = [[9, -14], [9, 4], [-width - 9, -14], [-width - 9, 4]];
-      const offsets = c.always ? [...near, [9, -28], [9, 18], [-width - 9, -28], [-width - 9, 18], [-width / 2, -30], [-width / 2, 20]] : near;
+      const r = c.r || 0, k = r * Math.SQRT1_2, near = [[9 + k, -14 - k], [9 + k, 4 + k], [-width - 9 - k, -14 - k], [-width - 9 - k, 4 + k]];
+      const offsets = c.always ? [...near, [9 + k, -28 - k], [9 + k, 18 + k], [-width - 9 - k, -28 - k], [-width - 9 - k, 18 + k], [-width / 2, -30 - r], [-width / 2, 20 + r]] : near;
       let box = null;
       for (const [dx, dy] of offsets) {
         const b = { x: Math.max(4, Math.min(w - width - 4, c.x + dx)), y: c.y + dy, width, height };

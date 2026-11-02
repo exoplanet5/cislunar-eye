@@ -1,0 +1,123 @@
+/* NEOCP lookup dock (web/ui/neocp.js; design §3.1). Tokens only: --neocp is set on :root by app.js from the NEOCP_GEO
+   regime colour. Errors and caveats use --warn, never red (red is the NEOCP series colour). Nothing below 10 px. */
+.neo{position:relative;flex:none;padding:0 12px 8px;border-bottom:1px solid var(--line)}
+.neo .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.neo .mut{color:var(--muted)}
+.neo .ph h2{display:flex;align-items:center;gap:8px}
+.neo .ph h2 .dot{width:8px;height:8px;border-radius:50%;background:var(--neocp)}
+.neo .helper{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);white-space:nowrap}
+.neo .helper i{width:6px;height:6px;border-radius:50%;border:1px solid currentColor}
+.neo .helper.ready i{background:var(--live);border-color:var(--live)}
+.neo .helper.offline{color:var(--warn)}
+.neo .helper.offline i{background:var(--warn)}
+
+/* form: the field (input + ▾) and Fetch */
+.neo-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.neo .field{height:var(--ctl)}
+.neo .field input{height:100%;font-size:11px;color:var(--ink)}
+.neo .field input[aria-invalid=true]{color:var(--warn)}
+.neo .field button{flex:none;width:22px;height:100%;padding:0;border:0;border-left:1px solid var(--line);border-radius:0;background:none;color:var(--dim);font-size:10px}
+.neo .field button:hover{color:var(--ink)}
+.neo #neocp-fetch{padding:0 12px}
+.neo-note{margin:4px 0 0;font-size:10px;line-height:14px;color:var(--warn)}
+.neo-note.caveat{margin-top:8px}
+
+/* meta line: count · MPC read time | geo only · ↻ · ▾ */
+.neo-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:16px;margin-top:4px;font-size:10px;line-height:16px;color:var(--muted)}
+.neo-meta .mt.warn{color:var(--warn)}
+.neo-meta .mb{display:flex;align-items:center;gap:4px;flex:none}
+.neo-meta button{height:16px;min-width:16px;padding:0 4px;border:1px solid transparent;border-radius:3px;background:none;color:var(--muted);font-size:10px;line-height:14px}
+.neo-meta button:hover{color:var(--ink);border-color:var(--line)}
+.neo-meta .chip{padding:0 6px;border-color:var(--line);border-radius:8px}
+.neo-meta .chip[aria-pressed=true]{color:var(--ink);background:var(--chip-on);border-color:var(--accent)}
+
+/* shortlist table and dropdown share the columns: · desig flag scr V obs arc seen */
+.neo .sug{font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums}
+.neo .sug b{font-size:11px;font-weight:400;color:var(--ink)}
+.neo .sug u{text-decoration:none;font-weight:700;color:var(--accent-soft)}
+.neo .sug .num{text-align:right}
+.neo .sug .k-m{text-align:center;color:var(--dim)}
+.neo .sug .k-m.bad{color:var(--warn);font-weight:700}
+.neo .geo{display:inline-block;padding:0 3px;line-height:12px;border:1px solid color-mix(in srgb,var(--neocp) 55%,transparent);border-radius:3px;color:var(--neocp)}
+table.sug{width:100%;margin-top:4px;border-collapse:collapse;table-layout:fixed}
+/* 6 px between columns (each cell's left padding, inside its width): "helio" never runs into the score, nor V into OBS */
+table.sug th,table.sug td{height:18px;padding:0 0 0 6px;overflow:hidden;white-space:nowrap;line-height:18px}
+table.sug th{font-weight:400;text-align:left;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
+table.sug :is(th,td):first-child{padding:0}
+table.sug :is(th,td):nth-child(2){padding-left:3px}
+table.sug .c-m{width:10px} table.sug .c-f{width:36px} table.sug .c-s{width:24px} table.sug .c-v{width:30px}
+table.sug .c-o{width:24px} table.sug .c-a{width:30px} table.sug .c-n{width:32px}
+table.sug tbody tr{cursor:pointer}
+table.sug tbody tr:hover{background:var(--raised)}
+table.sug tbody tr:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+table.sug tr.hi{background:var(--row-sel)}
+table.sug tr.hi td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
+table.sug tfoot button{width:100%;height:18px;padding:0;border:0;background:none;color:var(--muted);font-size:10px;text-align:left;cursor:pointer}
+table.sug tfoot button:hover{color:var(--ink)}
+.neo .skel{display:block;width:70%;height:8px;border-radius:2px;background:var(--raised)}
+.neo .skel-row:nth-child(2) .skel{width:55%}
+.neo .skel-row:nth-child(3) .skel{width:62%}
+
+#neocp-suggest{position:absolute;left:12px;right:12px;top:calc(34px + var(--ctl));z-index:20;max-height:min(60vh,420px);overflow:auto;
+  scrollbar-width:thin;background:var(--tooltip-bg);backdrop-filter:blur(3px);border:1px solid var(--accent);border-radius:3px;box-shadow:0 8px 24px var(--scrim)}
+#neocp-suggest .sug-row{display:grid;grid-template-columns:10px minmax(0,1fr) 30px 18px 24px 18px 24px 24px;column-gap:6px;align-items:center;
+  height:20px;padding:0 4px;white-space:nowrap;cursor:pointer}
+#neocp-suggest.noflag .sug-row{grid-template-columns:10px minmax(0,1fr) 18px 24px 18px 24px 24px}
+#neocp-suggest .sug-row>span{overflow:hidden}
+#neocp-suggest .sug-row:hover{background:var(--raised)}
+#neocp-suggest .sug-row.hi{background:var(--row-sel);box-shadow:inset 2px 0 0 var(--accent)}
+#neocp-suggest .sug-cols{height:18px;color:var(--muted);text-transform:uppercase;cursor:default}
+#neocp-suggest .sug-cols:hover{background:none}
+.neo .sug-h,.neo .sug-f{display:flex;justify-content:space-between;gap:8px;padding:2px 8px;font-size:10px;line-height:16px;color:var(--muted);white-space:nowrap}
+.neo .sug-h{border-bottom:1px solid var(--line)}
+.neo .sug-h .warn{color:var(--warn)}
+.neo .sug-f{border-top:1px solid var(--line)}
+
+/* requested objects: the shared list grid, two lines (20 + 14 px); at most four rows, then it scrolls */
+.neo .req-h{display:flex;align-items:center;justify-content:space-between;height:24px;margin-top:4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.neo .req-h button{letter-spacing:0;text-transform:none}
+.neo .req{max-height:160px;overflow-y:auto;scrollbar-width:thin}
+/* more rows than fit: "· ↓ n more" in the header (neocp.js overflowCue) and a fade at the box's foot */
+.neo .req.over{-webkit-mask-image:linear-gradient(var(--ink) calc(100% - 14px),transparent);mask-image:linear-gradient(var(--ink) calc(100% - 14px),transparent)}
+.neo .req-h .rq-more{letter-spacing:0;text-transform:none;color:var(--dim)}
+.neo .rq{--c:var(--neocp);display:grid;grid-template-columns:16px 10px minmax(0,1fr) 48px 60px 16px;column-gap:6px;align-items:center;padding:3px 0;
+  border-radius:3px;font-size:11px;line-height:20px;cursor:default}
+.neo .rq:hover{background:var(--raised)}
+.neo .rq:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.neo .rq.selected{background:var(--row-sel);box-shadow:inset 0 0 0 1px var(--accent)}
+.neo .rq.flash{outline:1px solid var(--accent);outline-offset:-1px}
+.neo .rq button{width:16px;height:16px;padding:0;border:0;border-radius:3px;background:none;color:var(--muted);font-size:11px;line-height:16px;cursor:pointer}
+.neo .rq button:hover{color:var(--ink);background:var(--raised)}
+.neo .rq .eye{justify-self:center;text-align:center}
+.neo .rq button.eye{color:var(--accent-soft)} .neo .rq button.eye[aria-pressed=false]{color:var(--muted)}
+.neo .rq .eye.bang{color:var(--warn);font-weight:700}
+.neo .rq.err{--c:var(--muted)}
+.neo .rq .nm{overflow:hidden;font-weight:700;color:var(--ink);text-overflow:ellipsis;white-space:nowrap}
+.neo .rq.err .nm{color:var(--dim)}
+.neo .rq.off .nm,.neo .rq.off .range{color:var(--muted)}
+.neo .rq.selected .nm{color:var(--sel-ink)}
+.neo .rq .src{font-size:10px;color:var(--dim);white-space:nowrap}
+.neo .rq .q-fit{color:var(--q-fit)} .neo .rq .q-gp{color:var(--q-gp)} .neo .rq .q-extrap{color:var(--warn)} .neo .rq .q-none{color:var(--muted)}
+.neo .rq .range{text-align:right;color:var(--dim);white-space:nowrap}
+.neo .rq .x{grid-column:6}
+.neo .rq .st{grid-column:3/6;padding-right:4px;font-size:10px;line-height:14px;color:var(--dim)}
+.neo .rq .st.wide{grid-column:3/7}
+.neo .rq .st.warn{color:var(--warn)}
+.neo .rq .re{grid-column:6;align-self:start}
+
+/* phone: 28 px rows in the shortlist, a 28 px hit box round each small glyph button (::after) */
+@media(max-width:700px){
+  table.sug tbody td,table.sug tfoot button{height:28px;line-height:28px}
+  .neo-meta{min-height:24px}.neo-meta .mb{gap:12px}
+  .neo-meta button,.neo .req-h button,.neo .rq button{position:relative}
+  .neo-meta button::after,.neo .req-h button::after{content:"";position:absolute;inset:-7px}   /* bordered: -6 px past the border */
+  .neo .rq button.eye::after{content:"";position:absolute;inset:-6px}
+  .neo .rq .x::after{content:"";position:absolute;inset:-6px -6px -2px}
+  .neo .rq .re::after{content:"";position:absolute;inset:-2px -6px -6px}
+}
+
+@media (prefers-reduced-motion:no-preference){
+  .neo .skel{animation:neo-wait 1.2s ease-in-out infinite alternate}
+  .neo .rq .eye.spin{animation:neo-wait .9s ease-in-out infinite alternate}
+}
+@keyframes neo-wait{from{opacity:1}to{opacity:.35}}

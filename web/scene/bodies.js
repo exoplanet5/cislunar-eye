@@ -1,12 +1,12 @@
-// Earth (Blue Marble, core quaternion, terminator #ffd54f, optional Sun −12° ring #4fc3f7) and the textured Moon,
-// tidally oriented to face Earth (ARCHITECTURE §9.6–9.7, AM7). MMX app.js:257-342 patterns.
+// Earth (Blue Marble texture, core quaternion, Sun 0° terminator #ffd54f) and the textured Moon, tidally oriented to
+// face Earth (ARCHITECTURE §9.6–9.7, AM7). MMX app.js:257-342 patterns.
 import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { solarTerminator, RE_KM } from '../states.js';
 
-export const SUN = '#ffd54f', ACCENT = '#4fc3f7';
+export const SUN = '#ffd54f';
 const LIFT = 1.0002, AXIS = new THREE.Vector3(0, 0, 1);
 
 function texture(img, renderer) {
@@ -47,8 +47,7 @@ export class Bodies {
     this.moon = new THREE.Mesh(new THREE.SphereGeometry(this.moonRadius, 96, 48),
       new THREE.MeshPhongMaterial({ map: texture(images.moon, renderer), shininess: 2, specular: 0x050505, color: 0xd8dade }));
     this.terminator = ring(SUN, 1.2, .55, materials);
-    this.twilight = ring(ACCENT, 1.0, .5, materials); this.twilight.visible = false;
-    scene.add(this.earth, this.moon, this.terminator, this.twilight);
+    scene.add(this.earth, this.moon, this.terminator);
     this.qf = new THREE.Quaternion(); this.q = new THREE.Quaternion(); this.q0 = new THREE.Quaternion(); this.q1 = new THREE.Quaternion();
     this.m4 = new THREE.Matrix4(); this.v = new THREE.Vector3(); this.n = new THREE.Vector3();
   }
@@ -59,7 +58,7 @@ export class Bodies {
     return q.setFromRotationMatrix(this.m4);
   }
 
-  update(t, focusKm, layers) {
+  update(t, focusKm) {
     const w = this.w, f = focusKm, sv = (p, out) => out.set((p[0] - f[0]) / RE_KM, (p[2] - f[2]) / RE_KM, -(p[1] - f[1]) / RE_KM);
     this.frameQuaternion(w.S, this.qf);
     sv([0, 0, 0], this.earth.position);
@@ -75,7 +74,6 @@ export class Bodies {
     const ex = toScene(x), ey = toScene(y), ez = toScene(z);   // body axes in ICRF scene coords; local = (bx, bz, −by)
     this.m4.set(ex[0], ez[0], -ey[0], 0, ex[1], ez[1], -ey[1], 0, ex[2], ez[2], -ey[2], 0, 0, 0, 0, 1);
     this.moon.quaternion.setFromRotationMatrix(this.m4).premultiply(this.qf);
-    this.moon.visible = layers.moon !== false;
     const s = w.sunF;
     this.light.position.set(s[0], s[2], -s[1]).normalize().multiplyScalar(1000); this.light.target.position.set(0, 0, 0);
     const boundary = solarTerminator([s[0] / RE_KM, s[1] / RE_KM, s[2] / RE_KM], 1);
@@ -83,11 +81,5 @@ export class Bodies {
     this.terminator.quaternion.setFromUnitVectors(AXIS, normal);
     this.terminator.position.copy(this.earth.position).addScaledVector(normal, Math.hypot(...boundary.center) * LIFT);
     this.terminator.scale.setScalar(boundary.radius * LIFT);
-    // Sun −12°: the small circle 102° from the subsolar point.
-    const a = (90 + 12) * Math.PI / 180;
-    this.twilight.visible = !!layers.twilight;
-    this.twilight.quaternion.copy(this.terminator.quaternion);
-    this.twilight.position.copy(this.earth.position).addScaledVector(normal, Math.cos(a) * LIFT);
-    this.twilight.scale.setScalar(Math.sin(a) * LIFT);
   }
 }

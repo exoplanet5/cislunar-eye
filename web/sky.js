@@ -116,7 +116,7 @@ export class StellarBackground {
       item.size ||= [item.el.offsetWidth, item.el.offsetHeight];
       const box = { x: (ndc.x + 1) * width / 2 + (item.kind === 'star-name' ? 8 : 6), y: (1 - ndc.y) * height / 2 + (item.kind === 'star-name' ? 6 : -12),
         width: item.size[0], height: item.size[1] };
-      if (box.y < 55 || box.y + box.height > height - 48 || box.x + box.width > width - 8 || occupied.collides(box, 6)) { item.el.hidden = true; continue; }
+      if (box.y < 8 || box.y + box.height > height - 8 || box.x + box.width > width - 8 || occupied.collides(box, 6)) { item.el.hidden = true; continue; }
       occupied.add(box); item.el.style.transform = `translate(${box.x}px,${box.y}px)`;
     }
   }

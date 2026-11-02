@@ -1,15 +1,15 @@
 // One THREE.Points per layer with a shared SDF sprite shader (ARCHITECTURE §9.3): per vertex colour, size (CSS px),
-// shape (0 circle, 1 square, 2 diamond, 3 triangle, 4 ring, 5 Lagrange: hollow diamond + centre dot), hollow flag and
-// alpha. Shapes are proportioned so that at the 8.5 px default the outlines of payload (circle), rocket body (square),
-// debris (diamond) and natural (triangle, the circle's area) differ by ≥ 1.5 px in some direction (V4). Logdepth chunks
-// included.
+// shape (0 circle, 1 square, 2 diamond, 4 ring, 5 Lagrange: hollow diamond + centre dot), hollow flag and alpha. Shapes
+// are proportioned so that at the 8.5 px default the outlines of payload (circle), rocket body (square) and debris
+// (diamond) differ by ≥ 1.5 px in some direction (V4). Shape 3 (the natural objects' triangle) is retired with the
+// minimoons. Logdepth chunks included.
 import * as THREE from 'three';
 
-export const SHAPE = { circle: 0, square: 1, diamond: 2, triangle: 3, ring: 4, lagrange: 5 };
-// Glyph proportions in units of r = size / 2 (square half-side, diamond (|x|+|y|)·√½ bound, triangle inradius with its
-// centroid .15 r below the centre, Lagrange diamond), the hollow stroke half-width (px) and the sprite (px, scale · size +
-// pad) that holds the farthest corner (the triangle's, 1.64 r) and the 1.6 px halo at every size.
-export const SDF = { square: .96, diamond: .96, triangle: .78, lagrange: .80, stroke: 1.2, sprite: [1.66, 3.4] };
+export const SHAPE = { circle: 0, square: 1, diamond: 2, ring: 4, lagrange: 5 };
+// Glyph proportions in units of r = size / 2 (square half-side, diamond (|x|+|y|)·√½ bound, Lagrange diamond), the hollow
+// stroke half-width (px) and the sprite (px, scale · size + pad) that holds the farthest corner (the square's and the
+// diamond's, .96·√2 = 1.36 r) and the 1.6 px halo (its 0.5 px antialiased fade included) at every size.
+export const SDF = { square: .96, diamond: .96, lagrange: .80, stroke: 1.2, sprite: [1.42, 3.8] };
 export const spriteSize = size => SDF.sprite[0] * size + SDF.sprite[1];
 export const SIZE = { idle: 8.5, hover: 10, selected: 12 };
 
@@ -22,13 +22,12 @@ export function targetStyle(T, { selected = false, hovered = false, stale = fals
 }
 
 // Circumradius (px from the sprite centre) of a shape at `size`, from the shader's constants: circle radius, square
-// corner, diamond tip, triangle apex or base corner.
+// corner, diamond tip.
 export function extent(shape, size) {
-  const r = size / 2, c = SDF.triangle * r;
+  const r = size / 2;
   if (shape === SHAPE.square) return SDF.square * r * Math.SQRT2;
   if (shape === SHAPE.diamond) return SDF.diamond * r * Math.SQRT2;
   if (shape === SHAPE.lagrange) return SDF.lagrange * r * Math.SQRT2;
-  if (shape === SHAPE.triangle) return Math.max(2 * c - .15 * r, Math.hypot(Math.sqrt(3) * c, c + .15 * r));
   return r;
 }
 
@@ -62,7 +61,6 @@ void main() {
   if ( shape == 1 ) d = max( abs( p.x ), abs( p.y ) ) - ${f(SDF.square)} * r;
   else if ( shape == 2 ) d = ( abs( p.x ) + abs( p.y ) ) * 0.7071 - ${f(SDF.diamond)} * r;
   else if ( shape == 5 ) d = ( abs( p.x ) + abs( p.y ) ) * 0.7071 - ${f(SDF.lagrange)} * r;
-  else if ( shape == 3 ) { vec2 q = vec2( abs( p.x ), p.y - 0.15 * r ); d = max( q.x * 0.866 - q.y * 0.5, q.y ) - ${f(SDF.triangle)} * r; }
   else d = length( p ) - r;
   float alpha;
   if ( shape == 4 || shape == 5 || vStyle.z > 0.5 ) {

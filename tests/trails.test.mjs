@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const three = pathToFileURL(path.join(root, 'web/vendor/three/three.module.min.js')).href;
@@ -215,27 +216,28 @@ test('marker styles (V4): hollow only for stale or extrapolated, derelict dim, s
   assert.deepEqual(targetStyle(T('extrap', 'derelict'), { selected: true, stale: true }), { size: SIZE.selected, shape: 0, hollow: true, alpha: 1 });
   assert.deepEqual(targetStyle(T('gp', 'derelict'), { hovered: true }), { size: SIZE.hover, shape: 0, hollow: false, alpha: 1 });
   assert.ok(SIZE.idle === 8.5 && SIZE.hover > SIZE.idle && SIZE.selected > SIZE.hover);
-  // The shader's SDFs (same constants), traced along 360 rays: every pair of the four target glyphs differs by ≥ 1.5 px
-  // in some direction, the triangle has the circle's area (± 5 %), and glyph + 1.6 px halo fit the sprite at every size.
+  // The shader's SDFs (same constants), traced along 360 rays: every pair of the three target glyphs differs by ≥ 1.5 px
+  // in some direction, and glyph + 1.6 px halo (+ its 0.5 px antialiased fade) fit the sprite at every size. The natural
+  // objects' triangle (shape 3) is gone with the minimoons: no SHAPE.triangle, no shape-3 branch in the shader.
   const sdf = (shape, x, y, size) => {
     const r = size / 2;
     if (shape === SHAPE.square) return Math.max(Math.abs(x), Math.abs(y)) - SDF.square * r;
     if (shape === SHAPE.diamond) return (Math.abs(x) + Math.abs(y)) * .7071 - SDF.diamond * r;
-    if (shape === SHAPE.triangle) { const qx = Math.abs(x), qy = y - .15 * r; return Math.max(qx * .866 - qy * .5, qy) - SDF.triangle * r; }
     return Math.hypot(x, y) - r;
   };
   const ray = (shape, a, size) => { let lo = 0, hi = size * 2; for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (sdf(shape, m * Math.cos(a), m * Math.sin(a), size) < 0) lo = m; else hi = m; } return lo; };
-  const shapes = [SHAPE.circle, SHAPE.square, SHAPE.diamond, SHAPE.triangle], prof = shapes.map(s => Array.from({ length: 360 }, (_, i) => ray(s, i * Math.PI / 180, SIZE.idle)));
-  for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) {
+  const shapes = [SHAPE.circle, SHAPE.square, SHAPE.diamond], prof = shapes.map(s => Array.from({ length: 360 }, (_, i) => ray(s, i * Math.PI / 180, SIZE.idle)));
+  for (let a = 0; a < shapes.length; a++) for (let b = a + 1; b < shapes.length; b++) {
     const diff = Math.max(...prof[a].map((x, i) => Math.abs(x - prof[b][i])));
     assert.ok(diff >= 1.5, `shapes ${shapes[a]}/${shapes[b]} differ by ${diff.toFixed(2)} px`);
   }
-  const area = p => p.reduce((s, x) => s + x * x / 2 * Math.PI / 180, 0);
-  assert.ok(Math.abs(area(prof[3]) / area(prof[0]) - 1) < .05, `triangle/circle area ${area(prof[3]) / area(prof[0])}`);
   for (const size of Object.values(SIZE)) for (const s of shapes) {
     const far = Math.max(...Array.from({ length: 360 }, (_, i) => ray(s, i * Math.PI / 180, size)));
     assert.ok(far <= extent(s, size) + 1e-3 && far > extent(s, size) - .15, `extent(${s}, ${size}) ${extent(s, size)} vs traced ${far}`);
-    assert.ok(extent(s, size) + 1.6 <= spriteSize(size) / 2, `shape ${s} at ${size} px and its halo fit the sprite`);
+    assert.ok(extent(s, size) + 1.6 + .5 <= spriteSize(size) / 2, `shape ${s} at ${size} px and its halo fit the sprite`);
   }
+  assert.ok(!('triangle' in SHAPE) && !('triangle' in SDF) && !Object.values(SHAPE).includes(3), `natural triangle retired: ${JSON.stringify(SHAPE)}`);
+  const shader = readFileSync(path.join(root, 'web/scene/markers.js'), 'utf8');
+  assert.doesNotMatch(shader, /shape == 3/, 'no shape-3 (triangle) branch in the marker shader');
   assert.equal(SDF.stroke, 1.2);
 });

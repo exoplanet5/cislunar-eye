@@ -195,12 +195,16 @@ test('rangeText: km below 100,000 km, LD below 1 Mkm, Mkm from 1 Mkm out', () =>
 });
 
 test('edge chevrons (V12): edge points stay inside the scene; placeEdgeBox finds a free slot without oscillating', () => {
+  // The render carries no title or legend any more (design §6): the 12 px arrow box at the edge point stays ≥ 8 px inside
+  // every scene edge, at the design's insets (y 14 … h − 30), so "◀ Sun" is never clipped.
   const w = 876, h = 856;
   for (let a = -Math.PI; a < Math.PI; a += .05) {
     const p = edgePoint(a, w, h);
-    assert.ok(p.x >= 0 && p.x <= w && p.y >= 50 && p.y <= h - 70, `${a}: ${JSON.stringify(p)}`);
+    assert.ok(p.x >= 8 && p.x + 12 <= w - 8 && p.y >= 8 && p.y + 12 <= h - 8, `${a}: ${JSON.stringify(p)} (arrow box ≥ 8 px inside)`);
+    assert.ok(p.y >= 14 - 1e-9 && p.y <= h - 30 + 1e-9, `${a}: ${JSON.stringify(p)} (design insets)`);
     assert.equal(p.right, Math.cos(a) > .3);
   }
+  assert.ok(Math.abs(edgePoint(-Math.PI / 2, w, h).y - 14) < 1e-9 && Math.abs(edgePoint(Math.PI / 2, w, h).y - (h - 30)) < 1e-9, 'straight up / down reach the insets');
   // SE-L2 preset: Earth and the Sun lie in the same direction; the Sun box sits on the Earth chevron's edge point, just
   // above the centre line (the old ±16 rule flipped direction every step there and ended on the Sun after 40 steps)
   const sun = { x: 20, y: 420, width: 46, height: 16 }, earth = placeEdgeBox({ x: 20, y: 420, width: 107, height: 16 }, [sun], h);
@@ -209,7 +213,9 @@ test('edge chevrons (V12): edge points stay inside the scene; placeEdgeBox finds
   assert.equal(l1.y, 404, 'next free slot on the other side');
   // below the centre the first try is toward the centre (up), clear of the legend strip
   assert.equal(placeEdgeBox({ x: 300, y: 770, width: 90, height: 16 }, [{ x: 0, y: 760, width: 600, height: 96 }], h).y, 738);
-  // never above the scene top or below the foot; fully blocked: stays at its edge point
+  // never within 8 px of the scene top or bottom; fully blocked: stays at its edge point
   assert.equal(placeEdgeBox({ x: 20, y: 6, width: 80, height: 16 }, [{ x: 0, y: 0, width: 200, height: 30 }], h).y, 38);
+  assert.equal(placeEdgeBox({ x: 20, y: 6, width: 80, height: 16 }, [], h).y, 22, 'y 6 is inside the 8 px inset: the next slot down');
+  assert.equal(placeEdgeBox({ x: 20, y: h - 22, width: 80, height: 16 }, [], h).y, h - 38, 'bottom inset: the next slot up');
   assert.equal(placeEdgeBox({ x: 20, y: 500, width: 80, height: 16 }, [{ x: 0, y: 0, width: 2000, height: 2000 }], h).y, 500);
 });

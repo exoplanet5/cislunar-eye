@@ -1,0 +1,32 @@
+{
+ "ZTF10H5.htm": {
+  "sha256": "454e1344756ce2096d74c450c80ecb9cabaa29e8b7597ff0e3c9f8f877e3aaeb",
+  "from": "https://www.projectpluto.com/neocp2/mpecs/ZTF10H5.htm (heliocentric fit; Created 2026 Nov 1 12:35:06 UT)",
+  "downloaded": "2026-11-01"
+ },
+ "ZTF10H5_mpc.json": {
+  "sha256": "c53e69a8a55dcd3a132b16cabd1d27a4d5e02d3218fd5fd35c5469c1f83ebf7c",
+  "from": "https://data.minorplanetcenter.net/api/get-obs-neocp {\"trksubs\":[\"ZTF10H5\"],\"output_format\":[\"OBS80\"]}",
+  "downloaded": "2026-11-01"
+ },
+ "C46PP91.htm": {
+  "sha256": "e09ef377f4e7dbf26db333180db38a7a21071f45c3f2c7033ccbee512e5816df",
+  "from": "https://www.projectpluto.com/neocp2/mpecs/C46PP91.htm (bound geocentric fit, GEO score 95; off the NEOCP: MPC OBS80 '')",
+  "downloaded": "2026-11-01"
+ },
+ "summary.htm": {
+  "sha256": "61316be869654e6ef6735d0dc32772c459d1a5b23def56ebc0fba40a24b176d8",
+  "from": "https://www.projectpluto.com/neocp2/summary.htm (Last regenerated 2026 Nov 1 12:35:01 UTC)",
+  "downloaded": "2026-11-01"
+ },
+ "neocp.json": {
+  "sha256": "5a6351a48ed2da933695cbc37ede7c08e6b1e7395052c1e6b9dee356bc87bcf1",
+  "from": "https://www.minorplanetcenter.net/Extended_Files/neocp.json",
+  "downloaded": "2026-11-01"
+ },
+ "mpc_neocp.json": {
+  "sha256": "803b13f91871f6a17683cdf4e70f8918363852227f0dadfcd1b1d91fe74d31e4",
+  "from": "synthetic, in the shape of https://www.minorplanetcenter.net/Extended_Files/neocp.json (tests/browser.mjs route-fulfils the MPC list with it; C46FX01 = the fixture's canned helper answer build/fixture/request/C46FX01.json; dates near the fixture epoch 2026-10-21/22)",
+  "downloaded": "n/a (written 2026-11-01)"
+ }
+}

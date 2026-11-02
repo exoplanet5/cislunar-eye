@@ -2,8 +2,12 @@
 
     states   [--only cid,..] [--adapter name] [--tier N] [--offline] [--refresh] [--fetch] [--jobs N]
              dispatch() per drawn target -> build/states/<cid>.npz/.json, build/states_report.json,
-             build/moon_check.json, then build/neocp.json; a failing or missing adapter is recorded and the run
-             continues. --fetch first pulls a fresh Space-Track gp/gp_history snapshot for the GP targets (a
+             build/moon_check.json, then build/tracklets.json (the astrometry of identified targets, cle.astrometry);
+             a failing or missing adapter is recorded and the run continues. The targets are catalog.targets():
+             the master list minus catalog.VIEWER_EXCLUDED_GROUPS (NEOCP live / archive, natural objects); what
+             earlier runs built for those (build/states files, report entries, the retired build/neocp.json) is
+             deleted first, so it no longer pins old work/cache/fo stamps against scripts/prune.py.
+             --fetch first pulls a fresh Space-Track gp/gp_history snapshot for the GP targets (a
              failed pull is recorded as report['gp_fetch'] and the cached sets are used). Every report entry and
              every saved table carries the window it was built in; export draws only from the current window.
              --jobs N (CLE_JOBS, default 8; REVIEW C2): gp / bgtle / extrap targets build in N spawned worker
@@ -12,7 +16,7 @@
              process that built them, the report only here. --jobs 1 builds everything here in catalog order.
              An entry's `seconds` is the target's own work; time queued on work/fo.lock behind another process's
              find_orb run is recorded apart as `lock_wait_s`, so the per-target seconds compare across --jobs.
-    export   [--neocp-only]   build/states + Context -> dist/data/*.js
+    export                    build/states + build/tracklets.json + Context -> dist/data/*.js
     validate                  -> build/validation_report.md, build/validation.json
     all      states (same options), export, validate
 
@@ -104,6 +108,29 @@ def results(rows, this, win, ctx, jobs, prev=None):
                 yield build_one(futs[f], this, win, ctx, STATES)
 
 
+def retire_excluded(report, states_dir=None, build_dir=None, rows=None) -> list[str]:
+    """Delete what earlier runs built for the master-list rows the viewer leaves out (catalog.viewer_excluded): their
+    build/states/<cid>.json/.npz and states_report entries, and the retired build/neocp.json. Nothing rebuilds them,
+    so they would keep their work/cache/fo stamps "referenced" for scripts/prune.py forever. Returns the cids.
+    The directories default to the module's STATES / BUILD looked up at call time (tests patch those)."""
+    states_dir = STATES if states_dir is None else states_dir
+    build_dir = BUILD if build_dir is None else build_dir
+    gone = []
+    for row in catalog.load()["objects"] if rows is None else rows:
+        if not catalog.viewer_excluded(row):
+            continue
+        hit = report.get("targets", {}).pop(row["cid"], None) is not None
+        for ext in (".json", ".npz"):
+            path = states_dir / f"{row['cid']}{ext}"
+            if path.exists():
+                path.unlink()
+                hit = True
+        if hit:
+            gone.append(row["cid"])
+    (build_dir / "neocp.json").unlink(missing_ok=True)
+    return gone
+
+
 def states(args, win, ctx) -> dict:
     from .adapters import primary
     rows = [r for r in catalog.targets(tiers=tuple(range(1, args.tier + 1))) if r["draw"] == "Y"]
@@ -116,6 +143,10 @@ def states(args, win, ctx) -> dict:
     this = [iso(win.t0_s), iso(win.t1_s)]
     report = load_json(BUILD / "states_report.json", {})
     report.setdefault("targets", {})
+    gone = retire_excluded(report)
+    if gone:
+        print(f"retired {len(gone)} targets the viewer leaves out: {', '.join(gone)}", flush=True)
+        write_json(BUILD / "states_report.json", report)
     for v in report["targets"].values():          # every entry keeps the window it was built in (DW-02): export
         v.setdefault("window", report.get("window"))   # draws a target only from an entry of the current window
     report |= {"window": this, "now_utc": iso(win.now_s)}
@@ -147,15 +178,15 @@ def states(args, win, ctx) -> dict:
         except Exception as e:
             print(f"moon check failed: {type(e).__name__}: {e}", flush=True)
         print(f"horizons requests: {horizons.SNAPSHOTS.fetched} fetched, {horizons.SNAPSHOTS.reused} from cache")
-    if rows:                                  # live NEOCP objects + tracklets of identified targets (§7, §11)
-        from .adapters import neocp
+    if rows:                                  # NEOCP / neocpsat tracklets of identified targets (§7)
+        from . import astrometry
         try:
-            neocp.write_json(win, ctx)
-            print(f"wrote {BUILD / 'neocp.json'}", flush=True)
+            doc = astrometry.write_json(win, ctx)
+            print(f"wrote {BUILD / 'tracklets.json'} ({len(doc['targets'])} targets with tracklets)", flush=True)
         except Exception as e:
-            report["neocp_json"] = {"status": "failed", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()}
+            report["tracklets_json"] = {"status": "failed", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()}
             write_json(BUILD / "states_report.json", report)
-            print(f"neocp.json failed: {type(e).__name__}: {e}", flush=True)
+            print(f"tracklets.json failed: {type(e).__name__}: {e}", flush=True)
     print(json.dumps(done))
     return done
 
@@ -173,7 +204,7 @@ def main(argv=None) -> int:
         p.add_argument("--fetch", action="store_true", help="pull a fresh Space-Track GP snapshot first (network)")
         p.add_argument("--jobs", type=int, default=int(os.environ.get("CLE_JOBS") or 8),
                        help="worker processes for independent targets (CLE_JOBS, default 8; 1 = sequential)")
-    sub.add_parser("export").add_argument("--neocp-only", action="store_true")
+    sub.add_parser("export")
     sub.add_parser("validate")
     args = ap.parse_args(argv)
     if getattr(args, "offline", False):
@@ -187,7 +218,7 @@ def main(argv=None) -> int:
         states(args, win, ctx)
     if args.cmd in ("export", "all"):
         from . import export
-        print(json.dumps(export.run(win, ctx, neocp_only=getattr(args, "neocp_only", False))))
+        print(json.dumps(export.run(win, ctx)))
     if args.cmd in ("validate", "all"):
         from . import validate
         rep = validate.run(win, ctx, catalog.targets())

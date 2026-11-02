@@ -3,7 +3,9 @@
 
 The sidecars are decoded here, interpolated with the same cubic Hermite and rotated into the same display frames
 (ARCHITECTURE AM1, AM4), and the page's own modules (web/loader.js, states.js, frames.js, lagrange.js) are run
-under node at the same epochs as a cross-check. Checks:
+under node at the same epochs as a cross-check. Only the viewer's targets are checked: catalog.js rows of
+cle.catalog.VIEWER_EXCLUDED_GROUPS (NEOCP live / archive, natural objects) are dropped, as the pipeline drops them.
+Checks:
 
   js      JS vs numpy: target states (Moon-centred recombination included), frame matrices, Lagrange points
   se      SE frame: every SE-L1/L2 target within 1e6 km of its marker over the window
@@ -12,7 +14,7 @@ under node at the same epochs as a cross-check. Checks:
   dro     DRO-A within 1e5 km of the Moon in the EM frame (with its Bill Gray cross-check from build/states)
   regime  geocentric range against each drawn target's regime over the window
   gp      Space-Track GP vs Horizons (cle.adapters.gp.check on cached Horizons vectors; no network)
-  dots    NEOCP tracklet dots against their target's track at the observation epochs
+  dots    astrometry tracklet dots (a chunk payload's "tracklets") against the target's track at the obs epochs
 
     ~/.venvs/astro313/bin/python -I scripts/sanity_check.py      -> build/sanity_check.json, .md; exit 1 on FAIL
 """
@@ -28,6 +30,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+from cle.catalog import viewer_excluded  # noqa: E402
 from cle.context import RE_KM, RM_KM, Context  # noqa: E402
 from cle.export import collinear  # noqa: E402
 from cle.timeutil import iso, window  # noqa: E402
@@ -51,7 +54,6 @@ const core = store.core, F = new Frames(decodeTrack(core.sun.track), decodeTrack
 const L = makeLagrange(core.meta.mu.se, core.meta.mu.em), out = { sun: [], moon: [], se: [], em: [], L: [], targets: {} };
 const tracks = {};
 for (const c of store.catalog.chunks) for (const [id, p] of Object.entries(store[c]?.targets || {})) tracks[id] = decodeTrack(p.track);
-for (const [id, o] of Object.entries(store.neocp?.objects || {})) tracks[o.cid || id.toLowerCase()] = decodeTrack(o.track);
 const rel = new Float64Array(6);
 for (const id of Object.keys(tracks)) out.targets[id] = [];
 for (const t of times) {
@@ -137,14 +139,13 @@ def status(ok, warn=False):
 
 def main():
     win, ctx = window(), Context()
-    core, catalog, neocp = sidecar("core"), sidecar("catalog"), sidecar("neocp")
-    cat = {e["id"]: e for e in catalog["targets"]}
-    tracks = {}
+    core, catalog = sidecar("core"), sidecar("catalog")
+    cat = {e["id"]: e for e in catalog["targets"] if not viewer_excluded(e)}
+    tracks, tklets = {}, {}
     for c in catalog["chunks"]:
         for cid, p in sidecar(c)["targets"].items():
-            tracks[cid] = decode(p["track"])
-    for d, o in neocp.get("objects", {}).items():
-        tracks[o.get("cid", d.lower())] = decode(o["track"])
+            if cid in cat:
+                tracks[cid], tklets[cid] = decode(p["track"]), p.get("tracklets") or []
     sun_tr, moon_tr = decode(core["sun"]["track"]), decode(core["moon"]["track"])
     se, em = collinear(core["meta"]["mu"]["se"]), collinear(core["meta"]["mu"]["em"])
     t0, t1 = core["meta"]["window"]["t0_ms"] / 1000, core["meta"]["window"]["t1_ms"] / 1000
@@ -166,6 +167,8 @@ def main():
     Lp = lagrange(sun_p, moon_p, se, em)
     dstate, drel = 0.0, 0.0
     for cid, rows in js["targets"].items():
+        if cid not in tracks:                                       # an excluded row's payload (see the docstring)
+            continue
         a = np.array([r if r is not None else [np.nan] * 6 for r in rows], float)
         b = sample(tracks[cid], tj)
         if tracks[cid]["center"] == "moon":
@@ -286,12 +289,10 @@ def main():
     except OSError as err:
         out["gp"] = {"error": f"{type(err).__name__}: {err}"}
 
-    # --- dots: NEOCP tracklet dots against the target track at the observation epochs
+    # --- dots: astrometry tracklet dots against the target track at the observation epochs
     dots = {}
-    items = [(o.get("cid", d.lower()), o.get("tracklets", [])) for d, o in neocp.get("objects", {}).items()]
-    items += [(cid, a.get("tracklets", [])) for cid, a in neocp.get("attached", {}).items()]
-    for cid, tks in items:
-        if cid not in tracks or not tks:
+    for cid, tks in tklets.items():
+        if not tks:
             continue
         dr = []
         for tk in tks:
@@ -349,7 +350,7 @@ def report(o):
     lines += ["", "## GP vs Horizons (cached Horizons vectors over the window)", "", "| NORAD | Horizons | GP sets | max km | median km | max age d |", "|---|---|---:|---:|---:|---:|"]
     lines += [f"| {k} | {v.get('horizons')} | {v.get('n_gp')} | {v.get('max_km', '—')} | {v.get('median_km', v.get('error', '—'))} | {v.get('max_age_d', '—')} |"
               for k, v in o["gp"].items() if isinstance(v, dict)]
-    lines += ["", "## NEOCP tracklet dots vs their target track", "", "| target | dots | median km | max km |", "|---|---:|---:|---:|"]
+    lines += ["", "## Astrometry tracklet dots vs their target track", "", "| target | dots | median km | max km |", "|---|---:|---:|---:|"]
     lines += [f"| {c} | {v['dots']} | {v['median_km']} | {v['max_km']} |" for c, v in o["dots"].items()]
     lines += ["", f"**Failures:** {', '.join(o['failures']) or 'none'}", "", f"**Warnings:** {', '.join(o['warnings']) or 'none'}", ""]
     return "\n".join(lines)

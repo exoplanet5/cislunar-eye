@@ -16,6 +16,184 @@
 
 ---
 
+## Amendments of 2026-11-01 (your decisions of the redesign; these override the body and, where they conflict, the amendments of 2026-10-21)
+
+Your request: keep the target list, its classification, the propagator and the coordinate converter; remove the
+minimoons and the NEOCP archive from the viewer; make live NEOCP an on-request function (you type a temporary
+designation; MPC API + Bill Gray's neocp2); keep the three frames, every regime and the stars; remove the Earth twilight
+ring; a credit line without Blue Marble; redesign the left, right and title panels. Built in the working tree on
+2026-11-01; README.md describes the result.
+
+- **AM9. D1 revised: network at runtime.** The page is still one self-contained `dist/index.html` plus the sidecars
+  `dist/data/*.js`, opened from `file://` (or Pages), and every catalog ephemeris is still computed offline (D3).
+  Besides its own files, the page makes exactly two kinds of request at runtime:
+  - MPC `https://www.minorplanetcenter.net/Extended_Files/neocp.json` (sent with `Access-Control-Allow-Origin: *`, so
+    readable from `file://`), ≥ 500 ms after the first rendered frame and then every 10 min, for the lookup's list of
+    objects on the NEOCP; a failure becomes dock text (the code never throws or logs);
+  - the local helper `scripts/serve.py` on 127.0.0.1 (AM13), only when you request a designation, when designations are
+    being restored (URL `neocp=` or localStorage `cle.neocp`), or when the page is served by the helper itself.
+  The helper is the only server. You start it by hand (`make serve`); neither `daily` nor launchd runs it. Without it
+  everything except NEOCP lookups works. G6 ("works fully offline from `file://`") holds for everything but the lookups.
+  D14's hourly `update-neocp` and G4 ("live NEOCP candidates refresh hourly") are superseded by AM11 and AM13.
+- **AM10. Viewer exclusion; the master list is unchanged.** `catalog.VIEWER_EXCLUDED_GROUPS = {"NEOCP live", "NEOCP
+  archive (unidentified apparitions)", "Natural companions (minimoons, quasi-satellites)"}`, plus `obj_type == natural`
+  as a second rule, in `catalog.viewer_excluded(row)`. `catalog.targets(..., viewer=True)` is the one loader that
+  `cle states`, `cle export`, `cle validate` and `scripts/sanity_check.py` use; `viewer=False` returns every row
+  (catalog tooling, tests). `scripts/build_master.py`, `catalog/master_list.*`, `catalog/TARGETS.md`, `catalog/sources/*`
+  and the regime classification are untouched (D11, §4); the propagators (§5) and the frame code (§8, AM1) too.
+  - On the 2026-10-22 list: 82 viewer targets (60 tier 1, 22 tier 2), 73 drawn. 20 rows leave the viewer: 5 natural,
+    8 NEOCP live, 7 NEOCP archive. `vela-2b-fragment`, an identified debris object filed in the archive group, goes
+    with it; that was accepted.
+  - `catalog.js`: 7 groups; no `natural` key; `chunks` without `neocp`; regime `NEOCP_GEO` and its rose family colour
+    stay in `REGIMES` / `FAMILY` for requested objects, its chunk mapped to `cislunar`.
+  - `cle states` first retires what earlier runs built for excluded rows (`build/states/<cid>.{json,npz}`, their
+    `states_report` entries, the dead `build/neocp.json`), so `scripts/prune.py` no longer keeps their find_orb stamps.
+  - Superseded: AM3's "natural" filter, the ▲ natural shape (§9.3), the natural edge chevrons and legend key (§10), the
+    live / archive NEOCP objects in the catalog (§1 G4, §5.6, §7).
+- **AM11. Scheduled NEOCP retired.** Removed: `make update-neocp`; `dist/data/neocp.js` and `targets-neocp.js` (export
+  deletes stale copies, and the manifest lists only the sidecars on disk); `cle export --neocp-only`; `build/neocp.json`;
+  the page's 10-min `neocp.js` re-injection and its 3-h snapshot staleness (§6.4, AM3's last bullet); `ops/run.sh`'s
+  `update-neocp` `CLE_NOW` pin; `ops/launchd/com.cislunar-eye.neocp.plist` (hourly at :45). `AGENTS` is the daily agent
+  only; `install-launchd` and `uninstall-launchd` both boot out and remove the legacy hourly agent where it is still
+  installed. `scripts/status.py` drops the snapshot check and the `update-neocp` log row. `make neocp-live` stays as a
+  manual refresh of `catalog/sources/neocp.tsv` (not in `daily`). Superseded: D14 (its NEOCP part), D1's reason for
+  the sidecars (the hourly NEOCP refresh), the `neocp.js` paths of §3.1–3.2, §5.6's hourly flow and lifecycle, the
+  `neocp.js` schema of §11, the `update-neocp` and hourly-agent rows of §13, the hourly budget of §15 and the
+  `neocp.js` re-injection test of §14.
+- **AM12. Catalog tracklets ride in the chunk payloads.** The astrometry of identified catalog targets (in this build
+  Falcon Heavy-013 S2 47 tracklets, Tiandu-1 14, Spektr-RG 14, Multijunk 11) is computed in `cle states` by
+  `cle.astrometry.catalog_tracklets` (with `neocp_obs`, moved out of `adapters/neocp.py`) into `build/tracklets.json`:
+  `{schema: "cle/tracklets@1", built_utc, window: [t0, t1], targets: {<cid>: {tracklets, obs_files, rms_arcsec}}}`.
+  `cle export` uses it only when its window equals the export window, and puts each non-empty list into the target's
+  chunk payload: `targets-<chunk>.js` → `targets[<cid>].tracklets` (the key is omitted when empty). The item shape is
+  unchanged: `{stn, n, t_ms[n], ra_deg[n], dec_deg[n], mag[n], range_km[n], stn_km (b64 f64 n×3), dot_km (b64 f64 n×3),
+  resid_arcsec [[dRA·cos δ, dDec] × n]}`, geocentric ICRF km. The dot geometry (D12, §7) is unchanged; only "→
+  `neocp.js`" in §7 is superseded. `tests/data_contract.test.mjs` checks the payload tracklets.
+- **AM13. The on-request NEOCP helper.**
+  - **Modules.** `src/cle/pluto.py`: pure parsers ported from `scripts/neocp_live.py` (`parse_mpec`, `parse_summary`,
+    OBS80 merge deduplicated by astrometric key, `page_center`, `valid_desig` = `^[A-Za-z0-9]{5,8}$` as a full match,
+    `case_safe_name`); no network, no `../neocpsat` import; `scripts/neocp_live.py` stays as the manual tool.
+    `src/cle/adapters/neocp.py` `build(target, win, ctx, pg=None, lines=None, fo_cache=None, lock_timeout=None,
+    use_fo=True)` tries `fo` / `fo_daily`, then `page_sv` (the page's find_orb state vector at the elements epoch,
+    geocentric when the fit is, else heliocentric + `ctx.sun_rv`, propagated with `cle.nbody`; no covariance; from the
+    first obs − 1 d to max(now, last obs) + 3 d, cut where the page's 48-h table σ passes 1°), then `page_table` as
+    the last resort, and records the path in `fit.mode` and the reason in `fit.fallback` (a short, path-free string).
+    `cle.adapters.fo.locked(timeout=None)` gains an optional timeout (unchanged without one). `src/cle/request.py`:
+    `fetch`, `build`, `respond`, `summary`, `window_from`, `cache_key`, `RequestError`. `scripts/serve.py`: stdlib
+    `ThreadingHTTPServer`, `make serve`, flags `--port` (0 = any free port), `--dist`, `--no-fo`, `--allow-origin`.
+  - **Upstream.** Bill Gray's pseudo-MPEC `https://www.projectpluto.com/neocp2/mpecs/<D>.htm` (no CORS; browser-like
+    headers; 404 when unknown; stays served after delisting) and MPC `https://data.minorplanetcenter.net/api/get-obs-neocp`
+    (GET with the JSON body `{"trksubs": [D], "output_format": ["OBS80"]}`; empty when D is not, or no longer, on the
+    NEOCP), fetched in two threads, 30 s timeouts, one retry; `https://www.projectpluto.com/neocp2/summary.htm` with MPC
+    `neocp.json` for the summary. Observations from both are merged; while MPC lists none, those of earlier fetches
+    are kept.
+  - **API.**
+    - `GET /api/health` → `{ok: true, service: "cislunar-eye", api: 1, fo: <find_orb present and enabled>, now_utc}`.
+    - `GET /api/neocp/summary` → `{ok, regenerated_utc, fetched_utc, objects: {<desig>: {geo, moid_au, score, n_obs,
+      arc_d}}}`; `geo` is summary.htm's "(geo)" (Bill Gray's best fit is geocentric); score / n_obs / arc_d from MPC
+      `neocp.json`, null when it fails.
+    - `GET /api/neocp/<DESIG>?t0=<ms>&t1=<ms>[&now=<ms>]` (t0 < t1, ≤ 45 d apart; `now` defaults to the wall clock and
+      is clamped into the window) → **`cle/neocp-request@1`**: `{ok: true, schema, desig, built_utc, window:
+      {start_utc, stop_utc}, object: {cid, catalog, track, fit, caveat, tracklets, rms_arcsec, request}}`.
+      `catalog` follows `catalog.entry`: id `desig.lower()`, name and label the exact-case designation, group "NEOCP ·
+      requested", obj_type OTHER, tier 1, draw / drawn / default_visible true, chunk null (the track travels in the
+      answer), regime `EARTH_NEAR_HELIO` for a heliocentric page, else `NEOCP_GEO` unless `validate.regime_now` puts the
+      track at now in LUNAR_ORBIT, SE_L1, SE_L2 or EARTH_NEAR_HELIO, trail first obs − 0.5 d → now + 1 d, sources
+      `*pluto_mpec:<url>[first..last]` and `neocp_obs:mpc-api`, links to the Pluto page and MPC showobsorbs.
+      `track` is a strict §11 Track clipped to [t0, t1], srcs `fo:neocp:<D>` | `pluto_sv:<D>` | `pluto_mpec:<D>`,
+      `sigma_km` only on the fo and page-table paths. `fit` = `{mode, n_obs, n_used, rms_arcsec, arc_h, arc_d,
+      stations, obs_first, obs_last, epoch, epoch_jd_tt, elements, page, geo_score, geo, flyby, srp, pluto_url,
+      find_orb_ver, fo_args, page_check, fo_consistency, sigma_km_now, sigma_limit_utc, fallback}`. `request` =
+      `{desig, fetched_utc, page_created_utc, n_obs_mpc, n_obs_page, n_obs_used, on_neocp, mode, seconds, cached,
+      warnings, find_orb}`, plus `served_utc`, which serve.py stamps on every answer (a result-cache hit also gets
+      `cached: true` and its own `seconds`; `fetched_utc` stays the upstream read).
+    - Errors `{ok: false, error, message}`, the message one plain line of ≤ 60 characters that the page shows verbatim:
+      `bad_designation` / `bad_request` 400, `bad_origin` 403, `not_found` 404, `bad_host` 421, `no_orbit` /
+      `outside_window` 422, `internal` 500, `upstream` 502 (also when MPC fails and no neocp2 page exists yet, so an
+      outage never reads as "not on the NEOCP"), `busy` 503; 405 for other methods.
+  - **Caching and concurrency.** Upstream copies per designation in `work/cache/request/<case_safe_name>/` (page,
+    MPC OBS80, every observation seen, meta) for 10 min, never across the hh:36 regeneration slot; failed fetches are
+    not cached and a failing source falls back to its cached copy with a warning; nothing is written for a designation
+    with neither page nor observations. Answers in memory for 10 min under (desig, t0, t1, page Created stamp, sha256 of
+    the observations used); `now` is not in the key. A per-designation lock covers fetch and cache lookup, a global
+    build lock only `respond()` (wait ≤ 30 s, then `busy`), so a cached answer never waits for a build. find_orb runs in
+    `work/cache/request/fo/<stamp>` (not `work/cache/fo`, which prune manages) under the shared `work/fo.lock` with a
+    20 s timeout, after which the state-vector path is used with the warning "find_orb busy: fo.lock held > 20 s";
+    run directories older than 6 h are deleted at the next request. The DE440s Context is loaded once at start. A
+    client that disconnects mid-build costs nothing: the answer is cached before it is written.
+  - **Security.** Binds 127.0.0.1 only and refuses to start when another program already accepts on that port (macOS
+    would otherwise let `SO_REUSEADDR` bind beside a `*:<port>` server). The Host header must be `127.0.0.1:<port>` or
+    `localhost:<port>`, else 421 (DNS-rebinding guard). `/api/` requests and their preflights must come from an allowed
+    origin, checked before any upstream fetch, else 403 `bad_origin`: the helper's own pages (no Origin header and
+    `Sec-Fetch-Site` same-origin or none), `null` (`file://`), any http(s) loopback origin, `https://exoplanet5.github.io`
+    and `--allow-origin` ones; a cross-site request without an Origin (`<img>`, `<script>`, no-cors fetch, link) is
+    refused by its `Sec-Fetch-Site`. Static files: `dist/` only, no listing, no dot files, `..` refused, overlong names
+    404. Every answer carries `Access-Control-Allow-Origin: *` and `Cache-Control: no-store`; `OPTIONS` answers 204 with
+    `GET, OPTIONS`, `content-type` and `Access-Control-Allow-Private-Network: true`. Log lines escape control
+    characters; find_orb failures reach the client only as short path-free reasons.
+  - **Page side** (`web/ui/neocp.js`: `NeocpCore`, state and network without DOM, and the view `NeocpLookup`). The
+    helper base is `?helper=`, else `window.CLE_HELPER`, else the page's own origin when it is served over http from
+    127.0.0.1 / localhost, else `http://127.0.0.1:8765`. One request in flight, aborted with `AbortController` (× or a
+    150 s timeout); designations kept with their case in `neocp=` and localStorage `cle.neocp`. The answer's object
+    becomes target `req-<desig>` (`desig.toLowerCase()` would let ZTF10Gu and ZTF10GU collide) via
+    `W.addTarget(cat, 'request')` and `W.attach`, the track decoded before World changes; removal is soft (`track =
+    null`, hidden, `removed`), because target indices are baked into trail texels and marker slots.
+  - **Tests and fixture.** `tests/test_request.py` (parsers, builds, fetch cache, the helper on an ephemeral port; no
+    network). `npm run fixture` writes the canned answer `build/fixture/request/C46FX01.json` (tracklets G96 and T05),
+    whose shape `tests/data_contract.test.mjs` and `FixtureShapeTest` check and which `tests/browser.mjs` route-fulfils
+    together with MPC `neocp.json`. `tests/neocp.test.mjs` and `tests/timeline.test.mjs` cover the page side.
+- **AM14. UI redesign ("console" design).** Overrides §2 and §10 where they differ.
+  - **Layout.** `body` = 40 px title bar + a workspace `--left-w | 1fr | --right-w` (304 / 304 px; 280 px at ≤ 1180 px).
+    The title cells line up with the columns: brand · the **single epoch clock** (date, bold time, UTC) with one pill that
+    is both state and LIVE toggle (`LIVE` / `❚❚ PAUSED` / `▶ 1 h/s`; `aria-disabled` outside the data window) and
+    `Δ now` (`Δ build` outside the window) · the frame switch (keys 1 2 3) · `?`, `◧ Targets`, `Inspector ◨`. The stage
+    is a header (view title + frame note, VIEW presets, a Layers popover grouped Scene / Observations / Sky), an in-flow
+    banner strip, the scene and the time dock (transport without clock or LIVE button; a timeline with the selected
+    target's coverage band, the now line, day ticks, requested objects' observation bars and tracklet ticks; a legend
+    strip with the mouse hint and the credit). Left: the NEOCP lookup above Targets (search, tier chips with counts, the
+    grouped keyboard list). Right: Inspector tabs Target / Situation / About. At 701–1100 px Targets is a drawer and the
+    Inspector 272 px; at ≤ 700 px a 48 px title, a bottom tab bar (Targets, NEOCP lookup, Inspector) opening sheets,
+    a peek row with the selection and the legend behind a chip.
+  - **On the render** only the scale bar (`#foot-right`, the one keep-out box), the Sun indicator, edge chevrons (≥ 8 px
+    inside the edges; they include off-screen requested objects), the tooltip and the help; legend, credit, view title
+    and banner sit outside it.
+  - **Removed:** the Sun −12° nautical-twilight ring (D10's option, §9.6) with its `--cyan` token; natural objects
+    (filter chip, ▲ shape and legend key, chevrons, `--natural`); the whole `neocp.js` flow in `app.js`. The old
+    layout's clocks (time panel, scene title, the right panel's Epoch card, the narrow-screen top-bar clock) collapse
+    into the one title-bar clock, LIVE moves from the time panel to the title pill, and About becomes a tab instead of a
+    `<details>`. **Kept:** the three frames (AM1), every regime and its colour, the stars (D9, §9.8), the Sun 0°
+    terminator `#ffd54f`, Lagrange markers (AM4), tracklets and sight lines.
+  - **Credit:** "Illustration: Mickey", in the dock's legend strip at the bottom right, below and outside the render;
+    this supersedes §10's "· base map NASA Blue Marble". The Earth texture is still Blue Marble NG (AM7): its attribution,
+    with the night lights, the LROC Moon and Hipparcos, is a data credit in About.
+  - **Behaviour.** Keys add 1 / 2 / 3 (frames) and N (NEOCP lookup); keydown ignores Cmd / Ctrl / Alt and lets a focused
+    control take Space / Enter; Esc closes the innermost thing first (help, Layers, legend, drawer or sheet) and then
+    deselects. LIVE ticks the scene at 1 Hz. Situation is rendered on change and updates its numbers in place at ≤ 1 Hz;
+    the target list refreshes in place, so keyboard focus survives. The URL adds `neocp=` (exact case) and `helper=`.
+  - **CSS.** `scripts/build_site.mjs` inlines `web/theme.css`, then `web/css/*.css` in name order, into the template;
+    colours come only from tokens (regime colours from `catalog.js` at run time, `--neocp` set from `NEOCP_GEO`); no
+    text below 10 px.
+- **AM15. Known limitations (2026-11-01).**
+  - No orbit without a neocp2 page: an object posted before Bill Gray's next hourly run (≈ hh:35) answers `no_orbit`
+    "neocp2 page not generated yet"; nothing is fitted from MPC's observations alone, and the design's "fit from MPC
+    obs" state is not built. Bill Gray's summary and pages are not regenerated strictly together.
+  - `page_sv` has no covariance (no σ, `sigma_km_now` null); its 1° cut is a linear estimate from the page's 48-h
+    table; area-to-mass (`-g 17`) fits are not modelled on that path. Against find_orb on 2026-11-01: 15 km over 11 d
+    (8NIQ001), 10 km (C46PP91), 81 km at 15 Mkm (C1GZ065).
+  - A daily run that holds `work/fo.lock` for more than 20 s sends requests to `page_sv`.
+  - The answer cache ignores `now`; a re-request within 10 min with another `now` returns the first answer.
+  - `work/cache/request/` is not managed by `scripts/prune.py`; the per-designation caches accumulate (tens of KB each).
+  - A requested object is fitted inside the build's window: with an old build, current NEOCP objects answer
+    `outside_window`.
+  - The neocp2 "(geo)" rule is unverified (no summary seen so far had one); the FLAG column, `geo only` and the
+    geo-first sort were checked with mocked flags only.
+  - From the Pages copy the lookup is a cross-origin request to the loopback helper; the private-network preflight is
+    answered but no real browser has exercised that path yet. Origin `null` must stay allowed for `file://`, so a
+    sandboxed iframe passes the origin check too.
+  - A drawn request's status line (e.g. `✓ MPC 4 obs ✓ neocp2 ✓ find_orb · rms 0.38″ · 0.02 d`) wraps to three lines in
+    the 280 / 304 px panel, so the requested list scrolls after about three drawn rows.
+  - The export carries tiers 1–2 only (`catalog.targets(tiers=(1, 2))`), so the Tier 3 chip stays hidden.
+
 ## Amendments of 2026-10-21 (your decisions; these override the body)
 
 - **AM1. Default frame: Sun–Earth rotating, Earth-centred, in phase 1.**

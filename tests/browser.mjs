@@ -1,5 +1,9 @@
 // Playwright (system Chrome, headless, as MMX tests/browser.mjs) against the fixture page on file://, plus the real
-// dist/index.html with --dist. Every http(s) request is aborted and must never be attempted. Screenshots → build/screens/.
+// dist/index.html with --dist. Network: the page's only requests are MPC's neocp.json (read ≥ 500 ms after the first
+// frame, fulfilled from tests/fixtures/request/mpc_neocp.json) and the local NEOCP helper (http://127.0.0.1:8765:
+// /api/health, /api/neocp/summary, /api/neocp/C46FX01?t0&t1&now from build/fixture/request/C46FX01.json; a context can
+// play the helper offline, its requests refused). Any other http(s) request is aborted and fails the run, and so does any
+// console error except the refused-helper loads of an offline context. Screenshots → build/screens/.
 // Every screenshot is taken paused at a pinned ?t= with the wall clock pinned (page.clock) and CSS transitions finished,
 // so reruns match to a few anti-aliased DOM pixels; each is compared with build/screens_baseline/<name>.png: pixels with
 // max channel |Δ| > 8, fail above 0.1 %, diff image → build/screens_diff/. Baselines are keyed on the data manifests
@@ -9,7 +13,7 @@
 //   node tests/browser.mjs [--dist] [--no-fixture] [--update-baselines] [--strict] [--baselines DIR]      (CHROME_PATH overrides the browser)
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { cp, mkdir, readFile, readdir, rm, writeFile, copyFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, rm, writeFile, copyFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { inflateSync, deflateSync, crc32 } from 'node:zlib';
@@ -21,7 +25,10 @@ const args = process.argv.slice(2), UPDATE = args.includes('--update-baselines')
 const screens = path.join(root, 'build/screens'), diffDir = path.join(root, 'build/screens_diff'), work = path.join(root, 'build/browser', String(process.pid));   // per run: parallel runs keep their page
 const baselines = path.resolve(root, args.includes('--baselines') ? opt('--baselines') : 'build/screens_baseline');
 const NOW = '2026-10-21T13:00:00Z';            // epoch of every screenshot (the fixture's now)
-const WALL = '2026-10-22T13:00:00Z';           // pinned wall clock: inside the window (LIVE available), fixture NEOCP snapshot 24 h old (stale path)
+const WALL = '2026-10-22T13:00:00Z';           // pinned wall clock: inside the window (LIVE available); re-pinned before each screenshot
+const MPC_LIST = 'https://www.minorplanetcenter.net/Extended_Files/neocp.json', HELPER = 'http://127.0.0.1:8765';
+const MPC_JSON = readFileSync(path.join(root, 'tests/fixtures/request/mpc_neocp.json'), 'utf8');
+const CANNED = path.join(root, 'build/fixture/request/C46FX01.json');                 // npm run fixture: the helper's answer for C46FX01
 const DIFF_TOL = 8, DIFF_MAX = 1e-3;
 await mkdir(screens, { recursive: true }); await mkdir(baselines, { recursive: true });
 await rm(diffDir, { recursive: true, force: true });
@@ -113,30 +120,70 @@ async function writeBaselines() {
   for (const set of new Set(fresh.map(x => x.set))) {
     for (const f of await readdir(baselines)) if (f.startsWith(`${set}-`) && f.endsWith('.png')) await rm(path.join(baselines, f));
     const mine = fresh.filter(x => x.set === set);
-    meta.sets[set] = { manifest: mine[0].fp, chrome: browser.version(), viewport: '1440×900 / 390×844, DPR 1', updated: new Date().toISOString(), shots: mine.map(x => x.name) };
+    meta.sets[set] = { manifest: mine[0].fp, chrome: browser.version(), viewport: '1440×900 / 1024×768 / 390×844, DPR 1', updated: new Date().toISOString(), shots: mine.map(x => x.name) };
   }
   for (const x of fresh) await copyFile(x.file, path.join(baselines, `${x.name}.png`));
   await writeFile(metaFile, JSON.stringify(meta, null, 1) + '\n');
   shots.updated = fresh.length;
 }
 
-async function open(file, query = '', viewport = { width: 1440, height: 900 }, reducedMotion = 'reduce') {
+// The fixture network (see the header). net.helper 'online' answers from the fixtures; 'offline' refuses the helper's
+// requests like a closed port (the NEOCP lookup must show "helper offline" and keep the row waiting). net.log lists what
+// the page asked for, in order: 'mpc', 'health', 'summary', 'C46FX01'. Anything else → `requests` (a failure).
+const geoFlags = Object.fromEntries(JSON.parse(MPC_JSON).map(r => [r.Temp_Desig, { geo: r.Temp_Desig === 'C46FX01', moid_au: null, score: r.Score, n_obs: r.NObs, arc_d: r.Arc }]));
+function serve(route, net) {
+  const url = route.request().url(), u = new URL(url);
+  const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*', 'cache-control': 'no-store' },
+    body: typeof body === 'string' ? body : JSON.stringify(body) });
+  if (url === MPC_LIST) { net.log.push('mpc'); return json(MPC_JSON); }
+  if (u.origin === HELPER) {
+    const kind = u.pathname === '/api/health' ? 'health' : u.pathname === '/api/neocp/summary' ? 'summary' : u.pathname === '/api/neocp/C46FX01' ? 'C46FX01' : null;
+    if (kind) {
+      net.log.push(kind);
+      if (net.helper === 'offline') return route.abort('connectionrefused');
+      if (kind === 'health') return json({ ok: true, service: 'cislunar-eye', api: 1, fo: true, now_utc: WALL });
+      if (kind === 'summary') return json({ ok: true, regenerated_utc: '2026-10-22T12:35:01Z', fetched_utc: WALL, objects: geoFlags });
+      net.query.push(Object.fromEntries(u.searchParams));
+      return json(readFileSync(CANNED, 'utf8'));
+    }
+  }
+  requests.push(url); return route.abort();
+}
+
+async function open(file, query = '', viewport = { width: 1440, height: 900 }, reducedMotion = 'reduce', { helper = 'online' } = {}) {
   const context = await browser.newContext({ viewport, reducedMotion });
-  await context.route(/^https?:/, route => { requests.push(route.request().url()); return route.abort(); });
+  const net = { helper, log: [], query: [], refused: [] };
+  await context.route(/^https?:/, route => serve(route, net));
   const page = await context.newPage();
+  page.net = net;
   page.on('pageerror', error => errors.push(`${path.basename(file)}: ${error.message}`));
-  page.on('console', message => { if (message.type() === 'error') errors.push(`${path.basename(file)}: ${message.text()}`); });
+  page.on('console', message => {
+    if (message.type() !== 'error') return;
+    // an offline helper: the browser logs each refused load; that is the expected path, not a page error
+    const at = message.location()?.url || '';
+    if (net.helper === 'offline' && at.startsWith(`${HELPER}/api/`) && /net::ERR_CONNECTION_REFUSED/.test(message.text())) { net.refused.push(at); return; }
+    errors.push(`${path.basename(file)}: ${message.text()}${at ? ` (${at})` : ''}`);
+  });
   await page.clock.setSystemTime(WALL);                    // Date.now keeps advancing from WALL; performance.now is untouched
   await page.goto(pathToFileURL(file).href + query);
   await page.waitForFunction(() => window.__cle?.ready, null, { timeout: 20000 });
   await settle(page);
   return page;
 }
+// Wait (≤ ms) for a Node-side condition, e.g. a request the page makes on a timer.
+async function until(cond, ms = 5000, what = 'condition') {
+  for (const t0 = Date.now(); !(await cond()); ) { if (Date.now() - t0 > ms) throw new Error(`timed out after ${ms} ms waiting for ${what}`); await new Promise(r => setTimeout(r, 50)); }
+}
+// MPC's list is read ≥ 500 ms after the first frame: screenshots wait for it so the dock's meta line is settled.
+const listRead = page => until(async () => page.net.log.includes('mpc') && await ev(page, () => /on NEOCP/.test(document.getElementById('neocp-meta')?.textContent || '')), 5000, 'the MPC neocp.json read');
 const settle = page => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r)))));
 const shot = async (page, name, locator = null) => {
   await settle(page);
   const clock = await ev(page, () => ({ live: window.__cle.clock.live, url: location.search }));
   assert.ok(!clock.live && /[?&]t=/.test(clock.url), `${name}: screenshots need a pinned ?t= (LIVE ${clock.live}, ${clock.url})`);
+  await page.clock.setSystemTime(WALL);                                               // Δ now and the MPC read time: the same at every shot
+  await ev(page, () => window.__cle.setTime(window.__cle.clock.t));                   // repaint the clock UI at the pinned wall clock
+  await settle(page);
   const file = path.join(screens, `${name}.png`);
   await (locator ? page.locator(locator) : page).screenshot({ path: file, animations: 'disabled' });     // CSS transitions finished, not mid-way
   const r = await compare(name, file);
@@ -146,6 +193,9 @@ const ev = (page, f, arg) => page.evaluate(f, arg);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const canvasBox = page => page.locator('#scene canvas').boundingBox();
 const parkMouse = page => page.mouse.move(0, 0);                                  // top bar corner: nothing hoverable, leaves the canvas
+// Visible elements whose own text is set below 10 px (design §7: nothing under 10 px, credit and tags included).
+const smallText = page => ev(page, () => [...document.querySelectorAll('body *')].filter(e => e.offsetParent !== null && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())
+  && parseFloat(getComputedStyle(e).fontSize) < 10).map(e => `${e.id || e.className || e.tagName}: ${getComputedStyle(e).fontSize} "${e.textContent.trim().slice(0, 20)}"`));
 const shown = (page, sel) => ev(page, s => { const e = document.querySelector(s); return !!e && !e.hidden && getComputedStyle(e).display !== 'none'; }, sel);
 // Target labels whose box covers another target's marker centre (labels.js: soft dot boxes; always-on labels forced to
 // the least-covering offset), as 'label/marker' pairs.
@@ -158,11 +208,12 @@ const labelsOverMarkers = page => ev(page, () => {
   }
   return out;
 });
-// Edge chevrons that overlap the Sun indicator, the title, the legend or each other (V1/V12 placement), as 'a×b' pairs.
+// Edge chevrons that overlap the Sun indicator, the scale bar (the only chrome left on the render) or each other (V1/V12
+// placement), as 'a×b' pairs.
 const chevronClash = page => ev(page, () => {
   const box = e => e.getBoundingClientRect(), hit = (a, b) => a.left < b.right - .5 && a.right > b.left + .5 && a.top < b.bottom - .5 && a.bottom > b.top + .5;
   const chev = [...document.querySelectorAll('.edge-marker')].filter(e => !e.hidden && getComputedStyle(e).display !== 'none').map(e => [e.dataset.id, box(e)]);
-  const fixed = ['sun-indicator', 'legend', 'view-title', 'scene-clock'].map(id => document.getElementById(id)).filter(e => e && !e.hidden && getComputedStyle(e).display !== 'none').map(e => [e.id, box(e)]);
+  const fixed = ['sun-indicator', 'scale-bar'].map(id => document.getElementById(id)).filter(e => e && !e.hidden && getComputedStyle(e).display !== 'none').map(e => [e.id, box(e)]);
   const out = [];
   chev.forEach(([a, ba], i) => { for (const [b, bb] of [...chev.slice(i + 1), ...fixed]) if (hit(ba, bb)) out.push(`${a}×${b}`); });
   return { clash: out, chevrons: chev.map(([id]) => id) };
@@ -295,27 +346,72 @@ async function fixture() {
   const file = path.join(work, 'index.html');
   let page = await open(file, `?t=${NOW}`);
 
-  // Data, defaults and sky
+  // Data, defaults and sky. No minimoons, no NEOCP snapshot (neocp.js) and no NEOCP live / archive rows: requested NEOCP
+  // objects come only from the lookup dock.
   const info = await ev(page, () => {
     const c = window.__cle, w = c.world;
     return { n: w.targets.length, tracks: w.targets.filter(T => T.track).length, missing: c.missing, frame: c.state.frame, t: c.clock.t, live: c.clock.live,
       visible: w.targets.filter(c.isVisible).map(T => T.id).sort(), stars: c.sky.stars.geometry.attributes.position.count,
-      grid: c.sky.grid.visible, cons: c.sky.constellations.visible, starsOn: c.sky.stars.visible, neocp: c.neocpBuilt, labels: c.labelsShown(),
+      grid: c.sky.grid.visible, cons: c.sky.constellations.visible, starsOn: c.sky.stars.visible, labels: c.labelsShown(),
+      sources: [...new Set(w.targets.map(T => T.source))], groups: [...new Set(w.targets.map(T => T.group))], natural: w.targets.filter(T => T.cat.obj_type === 'natural' || 'natural' in T.cat).length,
+      legacy: ['neocpBuilt', 'neocpSnapshot', 'refreshNeocp'].filter(k => k in c), loaded: [...document.scripts].map(x => x.src).filter(Boolean).map(x => x.split('/').pop()),
       listed: document.querySelector('[data-id="fx-listed"]')?.textContent, listedTitle: document.querySelector('[data-id="fx-listed"]')?.title,
-      tier2Row: !!document.querySelector('[data-id="fx-stale-rb"]'), credit: document.querySelector('.scene-credit').textContent,
-      stale: document.getElementById('banner').textContent + ' ' + document.getElementById('readout').textContent };
+      tier2Row: !!document.querySelector('[data-id="fx-stale-rb"]'), banner: document.getElementById('banner').textContent };
   });
-  assert.equal(info.n, 12); assert.equal(info.tracks, 11); assert.deepEqual(info.missing, []);
+  assert.equal(info.n, 10); assert.equal(info.tracks, 9); assert.deepEqual(info.missing, []);
   assert.equal(info.frame, 'se'); assert.equal(info.t, Date.parse(NOW)); assert.equal(info.live, false);
-  assert.deepEqual(info.visible, ['c46fx01', 'fx-derelict', 'fx-dro', 'fx-em-l2', 'fx-flyby', 'fx-heo', 'fx-lunar-2h', 'fx-se-l1', 'fx-se-l2']);
+  assert.deepEqual(info.visible, ['fx-derelict', 'fx-dro', 'fx-em-l2', 'fx-flyby', 'fx-heo', 'fx-lunar-2h', 'fx-se-l1', 'fx-se-l2']);
   assert.equal(info.stars, 9827); assert.equal(info.starsOn, true); assert.equal(info.grid, false); assert.equal(info.cons, false);
-  assert.ok(info.neocp, 'neocp.js registered');
+  assert.deepEqual(info.sources, ['catalog']); assert.equal(info.natural, 0, 'no natural objects');
+  assert.ok(!info.groups.some(g => /NEOCP|Natural/i.test(g)), `no NEOCP live / archive or natural groups: ${info.groups}`);
+  assert.deepEqual(info.legacy, [], 'the neocp.js snapshot hooks are gone');
+  assert.ok(!info.loaded.some(x => /neocp/.test(x)) && !existsSync(path.join(work, 'data/neocp.js')), `no neocp.js: ${info.loaded}`);
   assert.match(info.listed, /listed, not drawn/); assert.match(info.listedTitle, /no public ephemeris/);
   assert.equal(info.tier2Row, true, 'tier-2 rows are listed even when hidden');
   assert.ok(info.labels.length <= 40 + 4 && info.labels.includes('Earth') && info.labels.includes('Moon'), info.labels.join(','));
-  assert.match(info.credit, /Illustration: Mickey · base map NASA Blue Marble/);
-  assert.match(info.stale, /older than 3 h/);                                           // pinned wall clock 24 h after the snapshot
-  ok('fixture loaded', `${info.n} targets, ${info.tracks} tracks, visible ${info.visible.length}, ${info.labels.length} labels, 9827 stars`);
+  ok('fixture loaded', `${info.n} targets, ${info.tracks} tracks, visible ${info.visible.length}, ${info.labels.length} labels, 9827 stars; no natural, NEOCP live/archive or neocp.js`);
+
+  // Network policy (spec A3): on a file:// page with nothing to restore, MPC's list is read once after the first frame and
+  // the helper is not touched until the dock is used.
+  await listRead(page); await page.waitForTimeout(300);
+  const net0 = { log: [...page.net.log], meta: await ev(page, () => [document.getElementById('neocp-meta').textContent, document.getElementById('helper-status').textContent,
+    [...document.querySelectorAll('#situation dt')].find(d => d.textContent === 'NEOCP')?.nextElementSibling.textContent]) };
+  assert.deepEqual(net0.log, ['mpc'], `requests at load: ${net0.log}`);
+  assert.match(net0.meta[0], /^6 on NEOCP · MPC 13:00/); assert.equal(net0.meta[1], 'helper', 'helper not probed at load');
+  assert.equal(net0.meta[2], 'on request · list 13:00', 'Situation shows the MPC read on a paused, idle page');
+  ok('network at load', `MPC neocp.json only ("${net0.meta[0].replace(/[↻▾▸].*$/, '').replace('geo only', '').trim()}"); helper not probed`);
+
+  // Chrome removed by the redesign: the Natural chip, the twilight (Sun −12°) layer, its legend key and its Earth ring,
+  // the old clocks and their containers.
+  const gone = await ev(page, () => ({ sel: ['[data-chip=nat]', '[data-layer=twilight]', '[data-legend=nat]', '[data-legend=twilight]', '#top-clock', '#utc-mini', '#scene-clock', '#frame-note', '.scene-title', '.scene-foot', '.time-panel']
+    .filter(q => document.querySelector(q)), twilight: 'twilight' in window.__cle.bodies, layers: Object.keys(window.__cle.layers).filter(k => /twilight|nat/i.test(k)),
+    chips: Object.keys(window.__cle.chips), text: document.body.innerText }));
+  assert.deepEqual(gone.sel, [], `removed chrome still present: ${gone.sel}`);
+  assert.ok(!gone.twilight && !gone.layers.length && gone.chips.join() === 't1,t2,t3', JSON.stringify({ twilight: gone.twilight, layers: gone.layers, chips: gone.chips }));
+  assert.ok(!/Blue Marble|minimoon|−12°|NEOCP archive/i.test(gone.text), 'no Blue Marble credit, minimoon, −12° or NEOCP archive text on the page');
+  ok('removed chrome', 'no Natural chip, twilight layer / legend / Earth ring, old clocks or NEOCP archive');
+
+  // One epoch clock: at an off-grid epoch exactly one element shows the time (the title bar's #utc-time).
+  const epochAt = async iso => { await ev(page, t => window.__cle.setTime(Date.parse(t)), iso); await settle(page);
+    return ev(page, hms => [...document.querySelectorAll('body *')].filter(e => e.offsetParent !== null && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.includes(hms)))
+      .map(e => e.id || e.className), iso.slice(11, 19)); };
+  for (const iso of ['2026-10-21T09:41:27Z', '2026-10-24T22:05:53Z']) assert.deepEqual(await epochAt(iso), ['utc-time'], `elements showing ${iso.slice(11, 19)}`);
+  const clk = await ev(page, () => ({ date: document.getElementById('utc-date').textContent, time: document.getElementById('utc-time').textContent, dt: document.getElementById('utc-clock').dateTime,
+    pill: document.getElementById('live-badge').textContent, delta: document.getElementById('elapsed').textContent }));
+  assert.deepEqual([clk.date, clk.time, clk.dt.slice(0, 19)], ['2026-10-24', '22:05:53', '2026-10-24T22:05:53'], JSON.stringify(clk));
+  assert.ok(/PAUSED/.test(clk.pill) && /^Δ now \+2 d 09 h$/.test(clk.delta), JSON.stringify(clk));
+  await ev(page, t => window.__cle.setTime(Date.parse(t)), NOW); await settle(page);
+  ok('one epoch clock', `#utc-time only (${clk.date} ${clk.time}, "${clk.pill}", "${clk.delta}")`);
+
+  // Credit: exactly "Illustration: Mickey", in the dock below the scene canvas, at its bottom right.
+  const cr = await ev(page, () => { const e = document.getElementById('credit'), b = e.getBoundingClientRect(), c = document.querySelector('#scene canvas').getBoundingClientRect(), d = document.getElementById('time-dock').getBoundingClientRect();
+    return { text: e.textContent, cls: e.className, n: document.querySelectorAll('.scene-credit').length, inScene: !!e.closest('#scene'), top: b.top, bottom: b.bottom, right: b.right, left: b.left,
+      cBottom: c.bottom, cRight: c.right, cLeft: c.left, dBottom: d.bottom, dRight: d.right, size: parseFloat(getComputedStyle(e).fontSize) }; });
+  assert.equal(cr.text, 'Illustration: Mickey'); assert.equal(cr.n, 1); assert.ok(/scene-credit/.test(cr.cls) && !cr.inScene, JSON.stringify(cr));
+  assert.ok(cr.top >= cr.cBottom && cr.left > (cr.cLeft + cr.cRight) / 2 && cr.cRight - cr.right <= 24 && cr.dBottom - cr.bottom <= 16 && cr.size >= 10,
+    `credit below the canvas at its bottom right: ${JSON.stringify(cr)}`);
+  ok('credit', `"${cr.text}" ${cr.size} px, ${(cr.top - cr.cBottom).toFixed(0)} px below the canvas, ${(cr.cRight - cr.right).toFixed(0)} px from its right edge`);
+  assert.deepEqual(await smallText(page), [], 'text below 10 px at 1440×900');
 
   // Opening view (V1): the Earth–Moon framing with SE-L1/L2 as edge chevrons; the EM glyphs stay hidden outside the EM
   // frame (V5, decision 4); Earth under 8 px gets an ink ring 3 px outside its limb; future dashes ≥ 8 px on screen at
@@ -387,10 +483,10 @@ async function fixture() {
     const c = window.__cle, b = c.bodies, n = new (b.terminator.position.constructor)(0, 0, 1).applyQuaternion(b.terminator.quaternion);
     const s = c.world.sunF, sv = [s[0], s[2], -s[1]], d = Math.hypot(...sv), ex = new (b.terminator.position.constructor)(1, 0, 0).applyQuaternion(b.moon.quaternion);
     const toEarth = b.earth.position.clone().sub(b.moon.position).normalize();
-    return { normalDot: (n.x * sv[0] + n.y * sv[1] + n.z * sv[2]) / d, color: b.terminator.material.color.getHexString(),
-      twilight: b.twilight.visible, twColor: b.twilight.material.color.getHexString(), tidal: ex.dot(toEarth) };
+    return { normalDot: (n.x * sv[0] + n.y * sv[1] + n.z * sv[2]) / d, color: b.terminator.material.color.getHexString(), solid: !b.terminator.material.dashed,
+      twilight: 'twilight' in b, tidal: ex.dot(toEarth) };
   });
-  assert.ok(term.normalDot > 1 - 1e-9 && term.color === 'ffd54f' && !term.twilight && term.twColor === '4fc3f7' && term.tidal > Math.cos(6 * Math.PI / 180), JSON.stringify(term));
+  assert.ok(term.normalDot > 1 - 1e-9 && term.color === 'ffd54f' && term.solid && !term.twilight && term.tidal > Math.cos(6 * Math.PI / 180), JSON.stringify(term));
   const halo = await trailSpread(page, 'fx-se-l2', g.L[1]);
   assert.ok(halo.count > 100 && halo.max < 6e5, `SE-L2 halo trail spread ${JSON.stringify(halo)}`);
   ok('SE rotating frame', `Sun x=${(g.sunF[0] / 1.496e8).toFixed(4)} AU, SE-L2 x=${g.L[1][0].toFixed(0)} km, terminator normal·sun=${term.normalDot.toFixed(12)}, Moon tidal ${term.tidal.toFixed(12)}, halo trail ≤ ${(halo.max / 1e3).toFixed(0)}e3 km of SE-L2`);
@@ -399,7 +495,7 @@ async function fixture() {
   // Marker glyphs (V4): hollow = position not from a current ephemeris (extrap or stale), derelict = dim fill (FX-DEREL: fresh GP)
   const mk = await ev(page, () => {
     const c = window.__cle, out = {};
-    c.world.targets.forEach((T, i) => { if (c.isVisible(T) && T.has) out[T.id] = { q: T.seg.quality, status: T.cat.status, stale: !!(T.snapshotStale || T.cat.staleness?.flag || /stale/i.test(T.caveat || '')),
+    c.world.targets.forEach((T, i) => { if (c.isVisible(T) && T.has) out[T.id] = { q: T.seg.quality, status: T.cat.status, stale: !!(T.cat.staleness?.flag || /stale/i.test(T.caveat || '')),
       hollow: c.markers.style[i * 4 + 2], alpha: +c.markers.style[i * 4 + 3].toFixed(2), size: c.markers.style[i * 4] }; });
     return out;
   });
@@ -460,6 +556,25 @@ async function fixture() {
   ok('EM rotating frame', `Moon x=${d.toFixed(0)} km, EM-L1 ${(g.L[2][0] / d).toFixed(5)} d, EM-L2 ${(g.L[3][0] / d).toFixed(5)} d (geocentric), DRO trail ≤ ${(droEm.max / 1e3).toFixed(0)}e3 km of the Moon; EM glyphs shown`);
   await ev(page, () => window.__cle.preset('em')); await shot(page, 'fixture-em');
 
+  // The three frames from the title bar's segmented control and from keys 1 / 2 / 3; the stage head names the frame.
+  const frameUI = () => ev(page, () => ({ frame: window.__cle.state.frame, pressed: [...document.querySelectorAll('#frames [data-frame]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.frame),
+    title: document.getElementById('view-title').title, trails: window.__cle.trails.frame }));
+  const frames = [];
+  for (const f of ['se', 'eci', 'em']) { await page.locator(`#frames [data-frame="${f}"]`).click(); await settle(page); frames.push(await frameUI()); }
+  await parkMouse(page);
+  for (const [k, f] of [['2', 'eci'], ['1', 'se'], ['3', 'em'], ['1', 'se']]) { await page.keyboard.press(k); await settle(page); const u = await frameUI(); frames.push(u); assert.equal(u.frame, f, `key ${k}`); }
+  for (const u of frames) assert.ok(u.pressed.length === 1 && u.pressed[0] === u.frame && u.trails === u.frame, JSON.stringify(u));
+  assert.deepEqual(frames.slice(0, 3).map(u => u.title), ['Sun–Earth rotating · focus Earth', 'ECI · ICRF · focus Earth', 'Earth–Moon rotating · focus Earth']);
+  // View presets from the stage head: the pressed button follows; a hand-moved camera has none.
+  const views = [];
+  for (const v of ['earth', 'moon', 'wide', 'l1', 'l2', 'em']) {
+    await page.locator(`#views [data-view="${v}"]`).click(); await settle(page);
+    views.push(await ev(page, () => ({ view: window.__cle.state.view, active: [...document.querySelectorAll('#views .active')].map(b => b.dataset.view), focus: window.__cle.state.focus })));
+  }
+  assert.deepEqual(views.map(x => [x.view, x.active.join()]), ['earth', 'moon', 'wide', 'l1', 'l2', 'em'].map(v => [v, v]), JSON.stringify(views));
+  assert.deepEqual(views.map(x => x.focus), ['earth', 'moon', 'earth', 'SE-L1', 'SE-L2', 'earth']);
+  ok('frames and views', `buttons and keys 1/2/3: ${frames.map(u => u.frame).join(' → ')}; presets ${views.map(x => x.view).join(', ')}`);
+
   // Focus the Moon (floating origin: the Moon sits at the scene origin)
   await ev(page, () => { window.__cle.setFrame('se'); window.__cle.focusOn('moon'); }); await settle(page);
   const fm = await ev(page, () => { const c = window.__cle; return { moon: c.bodies.moon.position.length(), focus: c.state.focus, cam: c.camera.position.length(),
@@ -480,13 +595,33 @@ async function fixture() {
   ok('focus + select target', `FX-LLO at origin, a = ${ft.a} km (Moon conic), range ${ft.range} km, ${ft.q}`);
   await shot(page, 'fixture-focus-target');
 
-  // Earth close-up: Blue Marble globe, #ffd54f terminator, optional Sun −12° ring
-  await ev(page, () => { const c = window.__cle; c.select(null); c.preset('earth'); document.querySelector('[data-layer="twilight"]').click(); }); await settle(page);
-  const earth = await ev(page, () => { const b = window.__cle.bodies; return { tw: b.twilight.visible, px: window.__cle.state.earthPx, map: !!b.earth.material.map?.image?.naturalWidth }; });
-  assert.ok(earth.tw && earth.px > 80 && earth.map, JSON.stringify(earth));
-  ok('Earth close-up', `${earth.px.toFixed(0)} px radius, Sun −12° ring on`);
+  // Inspector tabs (TARGET / SITUATION / ABOUT): selecting shows TARGET, deselecting SITUATION; a tab picked by hand holds
+  // until the selection changes; TARGET is disabled ("none") while nothing is selected.
+  const tabs = () => ev(page, () => ({ tab: window.__cle.tab, sel: [...document.querySelectorAll('[role=tab]')].filter(b => b.getAttribute('aria-selected') === 'true').map(b => b.id),
+    shown: ['readout', 'situation', 'about-panel'].filter(id => !document.getElementById(id).hidden), targetOff: document.getElementById('itab-target').disabled, nav: !document.getElementById('tab-nav').hidden }));
+  await ev(page, () => window.__cle.select(null)); await settle(page);
+  const tb = [await tabs()];
+  await page.locator('#itab-about').click(); tb.push(await tabs());
+  await ev(page, () => window.__cle.select('fx-dro')); await settle(page); tb.push(await tabs());
+  await page.locator('#itab-situation').click(); tb.push(await tabs());
+  await ev(page, () => window.__cle.setTime(window.__cle.clock.t + 3600e3)); await settle(page); tb.push(await tabs());   // no selection change: holds
+  await ev(page, () => window.__cle.select(null)); await settle(page); tb.push(await tabs());
+  await ev(page, () => window.__cle.select('fx-lunar-2h')); await settle(page); tb.push(await tabs());
+  await page.locator('#tab-nav [data-act="next"]').click(); await settle(page);
+  const stepped = await ev(page, () => window.__cle.state.selected);
+  await ev(page, t => { window.__cle.select(null); window.__cle.setTime(Date.parse(t)); }, NOW); await settle(page); tb.push(await tabs());
+  assert.deepEqual(tb.map(x => x.tab), ['situation', 'about', 'target', 'situation', 'situation', 'situation', 'target', 'situation'], JSON.stringify(tb));
+  for (const x of tb) assert.ok(x.sel.length === 1 && x.sel[0] === `itab-${x.tab}` && x.shown.length === 1 && x.shown[0] === { target: 'readout', situation: 'situation', about: 'about-panel' }[x.tab], JSON.stringify(x));
+  assert.ok(tb[0].targetOff && !tb[2].targetOff && tb[2].nav && !tb[3].nav && tb[5].targetOff, JSON.stringify(tb));
+  assert.ok(stepped && stepped !== 'fx-lunar-2h', `› steps to the next visible target: ${stepped}`);
+  ok('inspector tabs', 'select → TARGET, deselect → SITUATION, a hand-picked tab holds until the selection changes; ‹ › step');
+
+  // Earth close-up: the textured globe and the solid #ffd54f terminator; no Sun −12° ring (removed with its layer)
+  await ev(page, () => { const c = window.__cle; c.select(null); c.preset('earth'); }); await settle(page);
+  const earth = await ev(page, () => { const b = window.__cle.bodies; return { px: window.__cle.state.earthPx, map: !!b.earth.material.map?.image?.naturalWidth, term: b.terminator.visible }; });
+  assert.ok(earth.px > 80 && earth.map && earth.term, JSON.stringify(earth));
+  ok('Earth close-up', `${earth.px.toFixed(0)} px radius, terminator on, no −12° ring`);
   await shot(page, 'fixture-earth');
-  await ev(page, () => document.querySelector('[data-layer="twilight"]').click());
 
   // Scale cues (V12): a scale bar in the scene foot that follows the view, a GEO / 1-LD rings layer where Earth ≥ 2 px
   const barAt = () => ev(page, () => document.getElementById('scale-bar')?.textContent ?? null);
@@ -533,23 +668,24 @@ async function fixture() {
   ok('search by NORAD, keys Esc / Esc / E');
   // C9 detail: the help lists the 11 shortcuts, and Esc closes it without deselecting
   await ev(page, () => window.__cle.select('fx-heo')); await page.keyboard.press('?'); await settle(page);
-  const keys = await ev(page, () => document.querySelectorAll('#help kbd').length);
+  const keys = await ev(page, () => ({ n: document.querySelectorAll('#help kbd').length, text: [...document.querySelectorAll('#help .keys dt')].map(dt => `${dt.textContent.replace(/\s+/g, ' ').trim()} = ${dt.nextElementSibling.textContent}`).join(' | '), glyphs: document.querySelector('#help .glyphs').textContent }));
   await page.keyboard.press('Escape'); await settle(page);
-  assert.ok(keys >= 11 && await ev(page, () => window.__cle.state.selected === 'fx-heo' && document.getElementById('help').hidden), `${keys} kbd entries; Esc on the help keeps the selection`);
+  assert.ok(keys.n >= 11 && await ev(page, () => window.__cle.state.selected === 'fx-heo' && document.getElementById('help').hidden), `${keys.n} kbd entries; Esc on the help keeps the selection`);
+  assert.ok(keys.text.includes('1 2 3 = SE · ECI · EM frame') && keys.text.includes('N = NEOCP lookup'), keys.text);
+  assert.ok(!/natural|▲|−12/.test(keys.glyphs) && /Sun 0° terminator/.test(keys.glyphs), keys.glyphs);
   await ev(page, () => window.__cle.select(null));
 
-  // Tier 2 and Natural chips; the legend follows its layers and chips (natural row, Sun −12°, tracklets: V10)
-  await ev(page, () => { const c = window.__cle; c.select(null); c.focusOn('earth'); c.preset('wide'); c.setChip('t2', true); }); await settle(page);
-  let vis = await ev(page, () => window.__cle.world.targets.filter(window.__cle.isVisible).map(T => T.id));
-  assert.ok(vis.includes('fx-stale-rb') && !vis.includes('fx-minimoon'), vis.join(','));
-  await ev(page, () => window.__cle.setChip('nat', true)); await settle(page);
-  vis = await ev(page, () => window.__cle.world.targets.filter(window.__cle.isVisible).map(T => T.id));
-  assert.ok(vis.includes('fx-minimoon') && !vis.includes('fx-listed'), vis.join(','));
-  ok('tier 2 + natural toggles', `${vis.length} visible`);
+  // Tier 2 chip (through the button, with its count); the legend follows its layers (tracklets: V10); no natural row
+  await ev(page, () => { const c = window.__cle; c.select(null); c.focusOn('earth'); c.preset('wide'); }); await settle(page);
+  const chip0 = await ev(page, () => [...document.querySelectorAll('#chips [data-chip]')].map(b => [b.dataset.chip, b.textContent, b.getAttribute('aria-pressed'), b.hidden]));
+  assert.deepEqual(chip0, [['t1', 'Tier 19', 'true', false], ['t2', 'Tier 21', 'false', false], ['t3', 'Tier 30', 'false', true]], JSON.stringify(chip0));
+  await page.locator('#chips [data-chip="t2"]').click(); await settle(page);
+  const vis = await ev(page, () => window.__cle.world.targets.filter(window.__cle.isVisible).map(T => T.id));
+  assert.ok(vis.includes('fx-stale-rb') && !vis.includes('fx-listed') && await ev(page, () => window.__cle.chips.t2), vis.join(','));
+  ok('tier 2 chip', `${vis.length} visible; chips ${chip0.map(x => x[1]).join(' · ')}`);
   await shot(page, 'fixture-tier2');
-  await ev(page, () => document.querySelector('[data-layer="twilight"]').click()); await settle(page);
   const lg = await ev(page, () => { const row = s => { const e = document.querySelector(`[data-legend="${s}"]`); return e ? !e.hidden : null; }; return { nat: row('nat'), twilight: row('twilight'), tracklets: row('tracklets'), text: document.getElementById('legend').textContent.replace(/\s+/g, ' ').trim() }; });
-  assert.ok(lg.nat === true && lg.twilight === true, JSON.stringify(lg));
+  assert.ok(lg.nat === null && lg.twilight === null && !/natural|−12/.test(lg.text), JSON.stringify(lg));
   if (feature('V10 tracklet legend row', lg.tracklets !== null, '[data-legend="tracklets"] missing')) {
     assert.ok(lg.tracklets && /tracklet/i.test(lg.text), lg.text);
     await ev(page, () => document.querySelector('[data-layer="tracklets"]').click()); await settle(page);
@@ -559,10 +695,24 @@ async function fixture() {
   }
   await shot(page, 'fixture-legend', '#legend');
   ok('legend', lg.text);
-  await ev(page, () => document.querySelector('[data-layer="twilight"]').click()); await settle(page);
 
-  // Lagrange and trails toggles; trail length presets update one texel per target, no geometry rebuild
-  assert.equal(await ev(page, () => document.getElementById('layers-panel').open), false, 'Layers starts closed');
+  // Layers popover: "Layers 6/11" (Scene · Observations · Sky); the count follows the checkboxes; a click outside or Esc
+  // closes it. Then Lagrange and trails toggles; trail length presets update one texel per target, no geometry rebuild.
+  const lc = () => ev(page, () => ({ open: document.getElementById('layers-panel').open, count: document.getElementById('layer-count').textContent, on: document.getElementById('layer-on').textContent,
+    boxes: document.querySelectorAll('#layers-panel [data-layer]').length, groups: [...document.querySelectorAll('#layers-panel .lgh')].map(e => e.textContent) }));
+  const l0 = await lc();
+  assert.deepEqual(l0, { open: false, count: '6/11', on: '6 of 11 on', boxes: 11, groups: ['Scene', 'Observations', 'Sky'] }, 'Layers starts closed, 6 of 11 on');
+  await page.locator('#layers-panel summary').click(); await settle(page);
+  await page.locator('[data-layer="grid"]').check(); await settle(page);
+  const l1 = await lc();
+  assert.ok(l1.open && l1.count === '7/11' && l1.on === '7 of 11 on' && await ev(page, () => window.__cle.sky.grid.visible), JSON.stringify(l1));
+  const sb = await page.locator('#scene canvas').boundingBox();
+  await page.mouse.click(sb.x + 40, sb.y + sb.height - 40); await settle(page);                   // outside: closes
+  assert.equal((await lc()).open, false, 'a click outside closes Layers');
+  await page.locator('#layers-panel summary').click(); await page.locator('[data-layer="grid"]').uncheck(); await page.keyboard.press('Escape'); await settle(page);
+  const l2 = await lc();
+  assert.ok(!l2.open && l2.count === '6/11', JSON.stringify(l2));
+  ok('layers popover', `${l0.count} → ${l1.count} → ${l2.count}; closes on an outside click and on Esc`);
   await page.locator('#layers-panel summary').click();
   const before = await ev(page, () => window.__cle.trails.count.earth);
   await page.selectOption('#trail-length', '1d'); await settle(page);
@@ -573,27 +723,118 @@ async function fixture() {
   await page.locator('[data-layer="lagrange"]').check(); await page.selectOption('#trail-length', 'auto'); await settle(page);
   ok('trail presets and Lagrange toggle', `past 1 d texel, ${before} segments unchanged`);
 
-  // NEOCP tracklets: dots and sight lines; station chips with the code as text (V10)
-  await ev(page, () => { document.querySelector('[data-layer="sightlines"]').click(); window.__cle.select('c46fx01'); window.__cle.focusOn('c46fx01'); }); await settle(page);
+  await page.keyboard.press('Escape'); await settle(page);
+  assert.equal(await ev(page, () => document.getElementById('layers-panel').open), false, 'Esc in the popover closes Layers');
+
+  // Catalog tracklets (identified targets' astrometry, now in the chunk payloads): FX-HEO carries W68 and M22, 4 obs each;
+  // beads and sight lines; station chips with the code as text (V10)
+  await ev(page, () => { document.querySelector('[data-layer="sightlines"]').click(); window.__cle.select('fx-heo'); window.__cle.focusOn('fx-heo'); }); await settle(page);
   await page.waitForTimeout(150);
-  const tk = await ev(page, () => { const t = window.__cle.tracklets; return { dots: t.dotCount, shown: t.shownCount, sight: t.layers.some(L => L.sight.visible), stations: t.stations, items: t.items.length,
-    chips: [...document.querySelectorAll('#readout [data-station], #readout .stations .stn')].map(e => e.dataset.station || [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()) }; });
-  assert.ok(tk.dots === 10 && tk.shown === 10 && tk.sight && tk.items === 2 && tk.stations.join() === 'G96,T05', JSON.stringify(tk));
-  ok('NEOCP tracklets', `${tk.dots} dots, stations ${tk.stations.join(', ')}, sight lines on`);
-  if (feature('V10 station chips', tk.chips.length > 0, '#readout .stations .stn missing')) {
-    assert.deepEqual([...tk.chips].sort(), ['G96', 'T05']);
-    ok('station chips', tk.chips.join(', '));
-  }
+  const stationChips = () => ev(page, () => [...document.querySelectorAll('#readout .stations .stn[data-station]')].map(e => e.dataset.station));
+  const tk = await ev(page, () => { const t = window.__cle.tracklets; return { dots: t.dotCount, shown: t.shownCount, sight: t.layers.some(L => L.sight.visible), stations: t.stations, items: t.items.map(x => `${x.id}:${x.stn}:${x.n}`) }; });
+  assert.ok(tk.dots === 8 && tk.shown === 8 && tk.sight && tk.stations.join() === 'W68,M22', JSON.stringify(tk));
+  assert.deepEqual(tk.items, ['fx-heo:W68:4', 'fx-heo:M22:4']);
+  assert.deepEqual(await stationChips(), ['W68', 'M22']);
+  ok('catalog tracklets', `FX-HEO: ${tk.items.length} tracklets, ${tk.dots} beads, stations ${tk.stations.join(', ')}, sight lines on; station chips`);
+  await shot(page, 'fixture-tracklets');
+
+  // NEOCP on request (spec A1–A4): the first use of the dock probes the helper (health, then neocp2 flags: FLAG column,
+  // geo first); C46FX01 typed and fetched comes back from the helper (the fixture) and is drawn as target req-C46FX01:
+  // selected (TARGET tab), its 2 tracklets (G96, T05), its scene label with its range, URL neocp=, Situation's
+  // "NEOCP requested", the NEOCP REQUEST card with its MPC listing, the timeline's observation bars.
+  await ev(page, () => { const c = window.__cle; c.select(null); c.focusOn('earth', false); c.preset('em', 0); }); await settle(page);
+  const n0 = await ev(page, () => window.__cle.world.targets.length);
+  await page.locator('#neocp-input').click();
+  await until(() => page.net.log.includes('summary'), 5000, 'the helper probe and the neocp2 flags');
+  await until(() => ev(page, () => document.getElementById('helper-status').textContent === 'helper ready' && !!document.querySelector('#neocp-short .geo')), 3000, 'helper ready + FLAG column');
+  const sl = await ev(page, () => ({ head: [...document.querySelectorAll('#neocp-short thead th')].map(e => e.textContent), rows: [...document.querySelectorAll('#neocp-short tbody tr')].map(r => r.dataset.desig) }));
+  assert.deepEqual(page.net.log, ['mpc', 'health', 'summary'], `requests: ${page.net.log}`);
+  assert.ok(sl.head.includes('flag') && sl.rows[0] === 'C46FX01' && sl.rows.length === 5, `shortlist: geo first, 5 rows: ${JSON.stringify(sl)}`);
+  await page.keyboard.type('C46FX01'); await page.locator('#neocp-fetch').click();
+  await page.waitForFunction(() => window.__cle.world.byId.get('req-C46FX01')?.track && document.querySelector('#neocp-requested .rq.drawn'), null, { timeout: 15000 });
+  await page.waitForFunction(() => /[?&]neocp=C46FX01(&|$)/.test(location.search), null, { timeout: 3000 });   // URL writes are throttled (500 ms)
+  await page.waitForTimeout(150); await settle(page);
+  const nq = await ev(page, () => {
+    const c = window.__cle, W = c.world, T = W.byId.get('req-C46FX01'), sit = document.querySelector('#situation [data-neocp]');
+    return { n: W.targets.length, src: T.source, label: T.label, group: T.group, regime: T.regime.key, vis: c.isVisible(T), has: T.has, sel: c.state.selected, tab: c.tab, t: c.clock.t,
+      t0: W.t0, t1: W.t1, labels: c.labelsShown(), url: location.search, store: localStorage.getItem('cle.neocp'), tracklets: c.tracklets.items.filter(x => x.id === T.id).map(x => `${x.stn}:${x.n}`),
+      row: document.querySelector('#neocp-requested .rq.drawn')?.dataset.id, st: document.querySelector('#neocp-requested .rq .st')?.textContent.replace(/ /g, ' '),
+      listing: document.getElementById('ro-listing')?.textContent, card: document.querySelector('#readout .card.request h4')?.textContent,
+      sit: sit && [...sit.querySelectorAll('td')].map(td => td.textContent), mpc: [...document.querySelectorAll('#situation dt')].find(d => d.textContent === 'NEOCP')?.nextElementSibling.textContent,
+      obs: document.querySelectorAll('#timeline-marks .obs').length, obsSel: document.querySelectorAll('#timeline-marks .obs.sel').length, list: [...document.querySelectorAll('#target-list [data-id]')].some(r => r.dataset.id === T.id) };
+  });
+  const q = page.net.query[0];
+  assert.ok(nq.n === n0 + 1 && nq.src === 'request' && nq.label === 'C46FX01' && nq.group === 'NEOCP · requested' && nq.regime === 'NEOCP_GEO' && nq.vis && nq.has, JSON.stringify(nq));
+  assert.ok(nq.sel === 'req-C46FX01' && nq.tab === 'target' && nq.t === Date.parse(NOW), `selected, TARGET tab, clock kept inside the track: ${JSON.stringify(nq)}`);
+  assert.ok(+q.t0 === nq.t0 && +q.t1 === nq.t1 && +q.now >= nq.t0 && +q.now <= nq.t1, `helper query ${JSON.stringify(q)}`);
+  assert.deepEqual(nq.tracklets, ['G96:5', 'T05:5']); assert.deepEqual(await stationChips(), ['G96', 'T05']);
+  assert.ok(nq.labels.some(l => /^C46FX01 \d+\.\d+ LD$/.test(l)), `scene label "C46FX01 n LD": ${nq.labels}`);
+  assert.ok(/[?&]neocp=C46FX01(&|$)/.test(nq.url) && /[?&]sel=req-C46FX01(&|$)/.test(nq.url) && nq.store === 'C46FX01', `${nq.url} · localStorage ${nq.store}`);
+  assert.ok(nq.row === 'req-C46FX01' && nq.st === 'drawn · 10 obs · 1.13 d · rms 0.19″' && !nq.list, JSON.stringify({ row: nq.row, st: nq.st, list: nq.list }));
+  assert.ok(/^NEOCP request/i.test(nq.card) && nq.listing === 'Score 97 · V 19.8 · Updated Oct. 21.52 UT · not seen 2.08 d', `NEOCP REQUEST card listing: ${nq.listing}`);
+  assert.deepEqual(nq.sit, ['NEOCP requested', '1', '1', '1']); assert.equal(nq.mpc, 'on request · list 13:00');
+  assert.ok(nq.obs >= 2 && nq.obs === nq.obsSel, `timeline obs bars ${nq.obs} (${nq.obsSel} selected)`);
+  ok('NEOCP request', `C46FX01 → req-C46FX01 drawn and selected; "${nq.st}"; label "${nq.labels.find(l => l.startsWith('C46FX01'))}"; tracklets ${nq.tracklets}; listing "${nq.listing}"; ${nq.obs} obs bars`);
   await shot(page, 'fixture-neocp');
 
-  // Re-injecting neocp.js swaps the data only when built_utc changes (§11, file://)
-  assert.equal(await ev(page, () => window.__cle.refreshNeocp()), false);
-  const neocpFile = path.join(work, 'data/neocp.js'), text = await readFile(neocpFile, 'utf8');
-  await writeFile(neocpFile, text.replace(/"built_utc":"[^"]+"/, '"built_utc":"2026-10-21T13:10:00Z"').replaceAll('C46FX01 (NEOCP fixture)', 'C46FX01 (refreshed)'));
-  assert.equal(await ev(page, () => window.__cle.refreshNeocp()), true);
-  const re = await ev(page, () => ({ built: window.__cle.neocpBuilt, name: window.__cle.world.byId.get('c46fx01').cat.name }));
-  assert.deepEqual(re, { built: '2026-10-21T13:10:00Z', name: 'C46FX01 (refreshed)' });
-  ok('neocp.js re-injection', `built_utc → ${re.built}`);
+  // The same designation again adds no row and asks the helper nothing; Situation's "NEOCP requested" row opens the dock.
+  await page.locator('#neocp-input').fill('C46FX01'); await page.locator('#neocp-fetch').click(); await settle(page);
+  assert.ok(page.net.log.filter(x => x === 'C46FX01').length === 1 && await ev(page, () => document.querySelectorAll('#neocp-requested .rq').length === 1), 'a duplicate request adds nothing');
+  await page.locator('#itab-situation').click(); await page.locator('#situation [data-neocp] button').click(); await settle(page);
+  assert.equal(await ev(page, () => document.activeElement?.closest('.rq')?.dataset.desig), 'C46FX01', 'Situation → NEOCP requested focuses its row in the dock');
+  ok('NEOCP duplicate + Situation row', 'no second row or request; the Situation row focuses the requested row');
+
+  // Remove (row ×): soft removal (the target keeps its index: trail texels, marker slots), deselected, URL and storage
+  // cleaned; fetching it again redraws the same target in place.
+  await page.locator('#neocp-requested .rq[data-desig="C46FX01"] .x').click();
+  await page.waitForFunction(() => !/[?&]neocp=/.test(location.search), null, { timeout: 3000 }); await settle(page);
+  const rmv = await ev(page, () => { const c = window.__cle, T = c.world.byId.get('req-C46FX01'), sit = document.querySelector('#situation [data-neocp]');
+    return { kept: !!T, removed: T?.removed, track: T?.track, vis: T?.visible, sel: c.state.selected, tab: c.tab, url: location.search, store: localStorage.getItem('cle.neocp'), rows: document.querySelectorAll('#neocp-requested .rq').length,
+      head: document.querySelector('#neocp-dock .req-h').hidden, labels: c.labelsShown().filter(l => l.startsWith('C46FX01')), tracklets: c.tracklets.items.filter(x => x.id === 'req-C46FX01').length,
+      sit: sit && [...sit.querySelectorAll('td')].map(td => td.textContent), n: c.world.targets.length }; });
+  assert.ok(rmv.kept && rmv.removed && rmv.track === null && !rmv.vis && rmv.sel === null && rmv.tab === 'situation' && rmv.n === n0 + 1, JSON.stringify(rmv));
+  assert.ok(!/neocp=/.test(rmv.url) && rmv.store === null && rmv.rows === 0 && rmv.head && !rmv.labels.length && !rmv.tracklets, JSON.stringify(rmv));
+  assert.deepEqual(rmv.sit, ['NEOCP requested', '0', '0', '0']);
+  await page.locator('#neocp-input').fill('C46FX01'); await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__cle.world.byId.get('req-C46FX01')?.track && !window.__cle.world.byId.get('req-C46FX01').removed, null, { timeout: 15000 });
+  const again = await ev(page, () => ({ n: window.__cle.world.targets.length, sel: window.__cle.state.selected, vis: window.__cle.isVisible(window.__cle.world.byId.get('req-C46FX01')) }));
+  assert.deepEqual(again, { n: n0 + 1, sel: 'req-C46FX01', vis: true }, 're-requested in place (Enter fetches)');
+  ok('NEOCP remove + refetch', `soft removed (index kept, track dropped), URL "${rmv.url.slice(0, 60)}…" without neocp=; refetched into the same target`);
+  await page.locator('#neocp-requested .rq .x').click(); await settle(page);
+
+  // Reload with ?neocp=C46FX01: the helper is probed at load (something to restore) and the object is drawn again,
+  // without moving the clock or taking the selection.
+  const reload = await open(file, `?t=${NOW}&neocp=C46FX01`);
+  await reload.waitForFunction(() => window.__cle.world.byId.get('req-C46FX01')?.track, null, { timeout: 15000 }); await settle(reload);
+  const rs = await ev(reload, () => ({ t: window.__cle.clock.t, sel: window.__cle.state.selected, rows: [...document.querySelectorAll('#neocp-requested .rq.drawn')].map(r => r.dataset.desig),
+    url: location.search, vis: window.__cle.isVisible(window.__cle.world.byId.get('req-C46FX01')) }));
+  assert.ok(reload.net.log[0] === 'health' && reload.net.log.includes('C46FX01'), `restore probes the helper at load: ${reload.net.log}`);
+  assert.ok(rs.t === Date.parse(NOW) && rs.sel === null && rs.rows.join() === 'C46FX01' && rs.vis && /neocp=C46FX01/.test(rs.url), JSON.stringify(rs));
+  await reload.locator('#neocp-requested .rq').click(); await settle(reload);
+  assert.equal(await ev(reload, () => window.__cle.state.selected), 'req-C46FX01', 'a click on the requested row selects it');
+  ok('NEOCP restore from the URL', `requests ${reload.net.log.join(', ')}; drawn, clock and selection kept`);
+  await reload.context().close();
+
+  // Helper offline: the health probe is refused → "helper offline", the row waits with the helper's instructions, the
+  // designation is kept (URL), nothing throws; when the helper answers, ↻ draws it.
+  const off = await open(file, `?t=${NOW}`, undefined, 'reduce', { helper: 'offline' });
+  await listRead(off);
+  assert.deepEqual(off.net.log, ['mpc'], 'nothing but the MPC list at load');
+  await off.locator('#neocp-input').fill('C46FX01'); await off.locator('#neocp-fetch').click();
+  await off.waitForFunction(() => document.querySelector('#neocp-requested .rq.err'), null, { timeout: 10000 });
+  await off.waitForFunction(() => /[?&]neocp=C46FX01(&|$)/.test(location.search), null, { timeout: 3000 }); await settle(off);   // the waiting designation is kept
+  const of = await ev(off, () => ({ status: document.getElementById('helper-status').textContent, st: document.querySelector('#neocp-requested .rq .st').textContent.replace(/ /g, ' '),
+    note: document.getElementById('neocp-note').textContent, retry: !!document.querySelector('#neocp-requested .rq .re'), target: window.__cle.world.byId.has('req-C46FX01'), url: location.search,
+    flag: [...document.querySelectorAll('#neocp-short thead th')].map(e => e.textContent).includes('flag') }));
+  assert.ok(of.status === 'helper offline' && of.st === 'helper not running: run make serve' && /run make serve, then Fetch again/.test(of.note) && of.retry && !of.target && !of.flag, JSON.stringify(of));
+  assert.ok(/neocp=C46FX01/.test(of.url) && off.net.refused.length >= 1 && off.net.refused.every(u => u === `${HELPER}/api/health`), JSON.stringify({ url: of.url, refused: off.net.refused }));
+  await shot(off, 'fixture-neocp-offline');
+  off.net.helper = 'online'; await off.clock.setSystemTime(Date.parse(WALL) + 60e3);   // past the 3 s re-probe guard (shot() re-pinned WALL)
+  await off.locator('#neocp-requested .rq .re').click();
+  await off.waitForFunction(() => window.__cle.world.byId.get('req-C46FX01')?.track && document.querySelector('#neocp-requested .rq.drawn'), null, { timeout: 15000 });
+  assert.equal(await ev(off, () => document.getElementById('helper-status').textContent), 'helper ready');
+  ok('NEOCP helper offline', `"${of.status}", row "${of.st}", ${off.net.refused.length} refused probe(s) and no page error; ↻ draws it once the helper answers`);
+  await off.context().close();
 
   // URL round trip (replaceState, throttled 500 ms); a preset travels as view= (no cam=), a hand-moved camera as cam=
   await ev(page, () => { const c = window.__cle; c.setFrame('em'); c.select('fx-dro'); c.setTime(Date.parse('2026-10-25T06:00:00Z')); c.preset('wide'); });
@@ -617,7 +858,7 @@ async function fixture() {
   const ph13 = await ev(page, () => ({ view: window.__cle.state.view, cap: window.__cle.labels.cap, note: getComputedStyle(document.getElementById('view-description')).display,
     legend: getComputedStyle(document.getElementById('legend')).display, bannerH: document.getElementById('banner').getBoundingClientRect().height }));
   assert.ok(ph13.view === 'em' && ph13.cap === 16 && ph13.note === 'none' && ph13.legend === 'none' && ph13.bannerH < 30, JSON.stringify(ph13));
-  ok('phone V13 details', `view em, label cap 16, frame note hidden, legend collapsed, banner ${ph13.bannerH.toFixed(0)} px (≤ one line; the NEOCP alarm is in the Situation panel)`);
+  ok('phone V13 details', `view em, label cap 16, frame note hidden, legend collapsed, banner ${ph13.bannerH.toFixed(0)} px (≤ one line)`);
   if (feature('V13 phone opening view', phone.earthPx >= 2, `Earth ${phone.earthPx.toFixed(2)} px`)) assert.ok(phone.labels <= 16 + 4, `${phone.labels} labels (cap 16 + bodies/L points)`);
   if (feature('V13 legend chip', phone.chip, '#legend-toggle missing')) {
     const h0 = await ev(page, () => document.getElementById('legend').getBoundingClientRect().height);
@@ -628,6 +869,71 @@ async function fixture() {
     ok('phone legend chip', `collapsed ${h0.toFixed(0)} px, expanded ${h1.toFixed(0)} px`);
   }
   await shot(page, 'fixture-phone');
+
+  // Phone sheets (design §1): the tab bar opens Targets (full sheet), NEOCP (the same sheet, field focused) and the
+  // Inspector (half sheet, ⤢ full); a pick from a sheet closes it and the peek row shows the selection (ⓘ opens the
+  // Inspector on TARGET, × deselects); Esc, × or the active tab closes a sheet.
+  const sheet = () => ev(page, () => { const d = id => getComputedStyle(document.getElementById(id)).display, r = id => document.getElementById(id).getBoundingClientRect();
+    return { left: d('controls-panel'), right: d('state-panel'), full: document.getElementById('state-panel').classList.contains('full'), peek: !document.getElementById('peek').hidden,
+      peekName: document.querySelector('#peek .nm').textContent, hasSel: document.getElementById('ptab-inspector').classList.contains('has-sel'), sel: window.__cle.state.selected, tab: window.__cle.tab,
+      exp: ['targets', 'neocp', 'inspector'].map(k => document.getElementById(`ptab-${k}`).getAttribute('aria-expanded')), focus: document.activeElement?.id || '',
+      top: r('state-panel').top, ws: document.querySelector('.workspace').getBoundingClientRect().top, wh: document.querySelector('.workspace').getBoundingClientRect().height, tabs: r('ptabs').height, count: document.getElementById('ptab-count').textContent, sw: document.documentElement.scrollWidth }; });
+  const s0 = await sheet();
+  assert.ok(s0.left === 'none' && s0.right === 'none' && !s0.peek && s0.tabs === 48 && s0.count === '8' && s0.exp.join() === 'false,false,false', JSON.stringify(s0));
+  await page.locator('#ptab-targets').click(); await settle(page);
+  assert.deepEqual(await smallText(page), [], 'text below 10 px on the phone (Targets sheet)');
+  const s1 = await sheet();
+  assert.ok(s1.left === 'flex' && s1.exp[0] === 'true' && s1.sw <= 390, JSON.stringify(s1));
+  await listRead(page);
+  await shot(page, 'fixture-phone-targets');
+  await page.locator('.row-target[data-id="fx-dro"] .name').click(); await settle(page);
+  const s2 = await sheet();
+  assert.ok(s2.left === 'none' && s2.sel === 'fx-dro' && s2.peek && /DRO/.test(s2.peekName) && s2.hasSel, `a pick closes the sheet, the peek shows it: ${JSON.stringify(s2)}`);
+  await page.locator('#peek [data-peek="info"]').click(); await settle(page);
+  const s3 = await sheet();
+  assert.ok(s3.right === 'flex' && s3.tab === 'target' && s3.exp[2] === 'true' && Math.abs(s3.top - (s3.ws + .45 * s3.wh)) < 2, `ⓘ: Inspector half sheet on TARGET ${JSON.stringify(s3)}`);
+  await shot(page, 'fixture-phone-inspector');
+  await page.locator('#expand-info').click(); await settle(page);
+  const s4 = await sheet();
+  assert.ok(s4.full && Math.abs(s4.top - s4.ws) < 1, `⤢ full height: ${JSON.stringify(s4)}`);
+  await page.locator('#ptab-inspector').click(); await settle(page);                 // the active tab closes its sheet
+  assert.equal((await sheet()).right, 'none');
+  await page.locator('#ptab-neocp').click(); await settle(page);
+  const s5 = await sheet();
+  assert.ok(s5.left === 'flex' && s5.exp[1] === 'true' && s5.focus === 'neocp-input', `NEOCP tab: the sheet with the field focused ${JSON.stringify(s5)}`);
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await settle(page);   // the field, then the sheet
+  const s6 = await sheet();
+  assert.ok(s6.left === 'none' && s6.sel === 'fx-dro', JSON.stringify(s6));
+  await page.locator('#peek [data-peek="close"]').click(); await settle(page);
+  const s7 = await sheet();
+  assert.ok(!s7.peek && s7.sel === null && !s7.hasSel, JSON.stringify(s7));
+  ok('phone sheets', 'Targets sheet → pick closes it, peek shows the selection; ⓘ → Inspector half sheet (⤢ full), active tab closes; NEOCP tab focuses the field; Esc closes; × deselects');
+  await page.context().close();
+
+  // Mid width (701–1100 px, 1024×768): Targets is a drawer over the scene (closed by default; ◧ opens it; Esc or a click
+  // on the scene closes it; the canvas never resizes), the Inspector stays docked at 272 px, views from the select.
+  page = await open(file, `?t=${NOW}`, { width: 1024, height: 768 });
+  const midUI = () => ev(page, () => { const cp = document.getElementById('controls-panel'), cs = getComputedStyle(cp), sp = document.getElementById('state-panel');
+    return { left: cs.display, pos: cs.position, z: cs.zIndex, w: cp.getBoundingClientRect().width, right: sp.getBoundingClientRect().width, rightOn: getComputedStyle(sp).display !== 'none',
+      canvas: document.querySelector('#scene canvas').getBoundingClientRect().width, sw: document.documentElement.scrollWidth, pressed: document.getElementById('toggle-controls').getAttribute('aria-pressed'),
+      views: getComputedStyle(document.getElementById('views')).display, select: getComputedStyle(document.getElementById('view-select')).display, desc: getComputedStyle(document.getElementById('view-description')).display }; });
+  const m0 = await midUI();
+  assert.ok(m0.left === 'none' && m0.rightOn && m0.right === 272 && m0.sw <= 1024 && m0.pressed === 'false' && m0.views === 'none' && m0.select !== 'none' && m0.desc === 'none', JSON.stringify(m0));
+  await page.locator('#toggle-controls').click(); await settle(page);
+  const m1 = await midUI();
+  assert.ok(m1.left === 'flex' && m1.pos === 'absolute' && m1.w === 304 && +m1.z >= 20 && m1.canvas === m0.canvas && m1.pressed === 'true', `drawer over the scene: ${JSON.stringify({ m0, m1 })}`);
+  await listRead(page);                                                              // the drawer shows the dock's MPC rows
+  await shot(page, 'fixture-mid-drawer');
+  assert.deepEqual(await smallText(page), [], 'text below 10 px at 1024×768');
+  await page.keyboard.press('Escape'); await settle(page);
+  assert.equal((await midUI()).left, 'none', 'Esc closes the drawer');
+  await page.locator('#toggle-controls').click(); await settle(page);
+  const cb = await page.locator('#scene canvas').boundingBox();
+  await page.mouse.click(cb.x + cb.width - 60, cb.y + 60); await settle(page);
+  assert.equal((await midUI()).left, 'none', 'a click on the scene closes the drawer');
+  await page.selectOption('#view-select', 'moon'); await settle(page);
+  assert.deepEqual(await ev(page, () => [window.__cle.state.view, window.__cle.state.focus]), ['moon', 'moon']);
+  ok('mid 1024×768', `drawer ${m1.w} px over a ${m0.canvas.toFixed(0)} px canvas (unchanged), Inspector ${m0.right} px; Esc / scene click close it; view select`);
   await page.context().close();
 
   // Animated fly-to (1 s ease-in-out of the focus point; the camera offset is kept), then the camera module (V14):
@@ -690,14 +996,28 @@ async function fixture() {
   page = await open(file);
   const live = await ev(page, () => ({ live: window.__cle.clock.live, inside: window.__cle.clock.liveAvailable, t: window.__cle.clock.t }));
   assert.ok(live.live && live.inside && Math.abs(live.t - Date.parse(WALL)) < 120e3, JSON.stringify(live));
-  ok('LIVE default', `LIVE at ${new Date(live.t).toISOString()} (wall clock pinned to ${WALL})`);
+  // The title pill is the LIVE state and toggle (L); ● Now is pressed and the rate reads "real time" while LIVE.
+  const pill = () => ev(page, () => ({ badge: document.getElementById('live-badge').textContent, pressed: document.getElementById('live').getAttribute('aria-pressed'), cls: document.getElementById('live').className,
+    disabled: document.getElementById('live').getAttribute('aria-disabled'), now: document.getElementById('now').getAttribute('aria-pressed'), speed: [document.getElementById('speed').disabled, document.getElementById('speed').value],
+    delta: document.getElementById('elapsed').textContent, live: window.__cle.clock.live }));
+  const p0 = await pill();
+  assert.deepEqual(p0, { badge: 'LIVE', pressed: 'true', cls: 'pill live', disabled: 'false', now: 'true', speed: [true, 'live'], delta: 'Δ now 0 s', live: true });
+  await parkMouse(page); await page.keyboard.press('l'); await settle(page);
+  const p1 = await pill();
+  assert.ok(p1.badge === '❚❚ PAUSED' && p1.pressed === 'false' && p1.now === 'false' && !p1.speed[0] && p1.speed[1] === '3600' && !p1.live, JSON.stringify(p1));
+  await page.locator('#play').click(); await settle(page);
+  const p2 = await pill();
+  assert.ok(p2.badge === '▶ 1 h/s' && /play/.test(p2.cls), JSON.stringify(p2));
+  await page.locator('#now').click(); await settle(page);
+  assert.equal((await pill()).badge, 'LIVE', '● Now goes LIVE inside the window');
+  ok('LIVE default', `LIVE at ${new Date(live.t).toISOString()} (wall clock pinned to ${WALL}); pill LIVE → "${p1.badge}" (L) → "${p2.badge}" (Play) → LIVE (● Now)`);
   const ms = await ev(page, () => window.__cle.probe(60));
   ok('frame-time probe', `median ${ms.median.toFixed(2)} ms, p90 ${ms.p90.toFixed(2)} ms over 60 frames`);
   await page.context().close();
 }
 
 // Review fixes on the real data: chips keep default_visible, hidden targets hide their tracklet lines, master caveats,
-// NEOCP snapshot staleness, source badges, Lagrange glyph, and §9.2 focus precision (float32 GPU path emulated).
+// source badges, Lagrange glyph, and §9.2 focus precision (float32 GPU path emulated).
 async function fixes(page) {
   const r = await ev(page, () => {
     const c = window.__cle, w = c.world, vis = () => w.targets.filter(c.isVisible).map(T => T.id).sort().join();
@@ -706,16 +1026,14 @@ async function fixes(page) {
     const row = id => document.querySelector(`.row-target[data-id="${id}"]`);
     return { same: before === vis(), off, tl, ibexTitle: row('ibex')?.title || '', droBadge: row('dro-a')?.querySelector('.src')?.textContent,
       t3: document.querySelector('[data-chip=t3]').hidden, lshape: c.lagrange.layer.style[1],
-      neocp: w.targets.filter(T => T.source === 'neocp').map(T => [T.id, !!T.snapshotStale, row(T.id)?.querySelector('.warn')?.textContent]),
-      snapshot: c.neocpSnapshot, banner: document.getElementById('banner').textContent };
+      stale: w.targets.filter(T => T.draw && T.cat.staleness?.flag && row(T.id)).map(T => [T.id, row(T.id).querySelector('.warn')?.textContent]) };
   });
   assert.ok(r.same && r.off === '', `t1 chip off/on restores the default set (off: ${r.off})`);
   assert.ok(r.tl.every(([, g, v]) => !g || v) && r.tl.some(([, g]) => !g), `a hidden target hides its tracklet group ${JSON.stringify(r.tl)}`);
   assert.match(r.ibexTitle, /manoeuvre/); assert.equal(r.droBadge, 'G'); assert.equal(r.t3, true); assert.equal(r.lshape, 5);
-  const old = Date.parse(WALL) - Date.parse(r.snapshot) > 3 * 3600e3;
-  assert.ok(r.neocp.length && r.neocp.every(([, s, wn]) => s === old && (!old || wn === '⚠')), JSON.stringify(r));
+  assert.ok(r.stale.length && r.stale.every(([, wn]) => wn === '⚠'), `catalog-stale rows carry ⚠: ${JSON.stringify(r.stale)}`);
   ok('review fixes', `chip t1 off/on keeps defaults; ${r.tl.filter(x => !x[1]).length}/${r.tl.length} tracklet groups hidden (target hidden, or no tracklet inside its drawn trail window); `
-    + `IBEX caveat kept; DRO-A badge G; NEOCP snapshot ${old ? 'old: all ' + r.neocp.length + ' marked stale' : 'fresh'}`);
+    + `IBEX caveat kept; DRO-A badge G; ${r.stale.length} catalog-stale rows marked ⚠`);
 
   // §9.2: focus JWST, camera 1.6 km away; f32 emulation of modelViewMatrix·vertex for the marker and the head end.
   await ev(page, () => { const c = window.__cle; c.select('jwst'); c.focusOn('jwst'); });
@@ -760,14 +1078,54 @@ async function dist() {
     for (const T of w.targets) by[T.cat.tier] = (by[T.cat.tier] || 0) + 1;
     return { n: w.targets.length, tracks: w.targets.filter(T => T.track).length, visible: w.targets.filter(c.isVisible).length, has: w.targets.filter(T => T.has && c.isVisible(T)).length,
       missing: c.missing, frame: c.state.frame, labels: c.labelsShown().length, tiers: by, nodraw: document.querySelectorAll('.row-target.nodraw').length,
-      notrack: document.querySelectorAll('.row-target.notrack').length, flyby: w.targets.filter(T => T.cat.subgroup === 'flyby').map(T => [T.id, c.isVisible(T), T.has]),
-      hidden2: w.targets.filter(T => T.tier === 2 && c.isVisible(T)).length, tracklets: c.tracklets.items.length, dots: c.tracklets.dotCount,
-      window: [c.world.t0, c.world.t1].map(t => new Date(t).toISOString()) };
+      notrack: document.querySelectorAll('.row-target.notrack').length, hidden2: w.targets.filter(T => T.tier === 2 && c.isVisible(T)).length,
+      tracklets: c.tracklets.items.length, dots: c.tracklets.dotCount, window: [c.world.t0, c.world.t1].map(t => new Date(t).toISOString()),
+      excluded: w.targets.filter(T => /^NEOCP (live|archive)|^Natural/.test(T.group) || T.cat.obj_type === 'natural' || T.source !== 'catalog').map(T => T.id),
+      groups: [...document.querySelectorAll('#target-list .group-head')].map(h => h.dataset.group) };
   });
   assert.equal(info.frame, 'se'); assert.deepEqual(info.missing, []); assert.ok(info.tracks > 0 && info.has > 0, JSON.stringify(info));
-  assert.ok(info.flyby.every(([, v, h]) => v === h), `NEOCP flybys shown exactly when they have data now: ${JSON.stringify(info.flyby)}`);
+  assert.deepEqual(info.excluded, [], 'no minimoons, NEOCP live or NEOCP archive rows in the viewer');
+  assert.ok(info.groups.length >= 5 && !info.groups.some(g => /NEOCP|Natural/.test(g)), `list groups ${info.groups}`);
   assert.equal(info.hidden2, 0, 'tier 2 hidden by default');
   ok('dist loaded', `${JSON.stringify(info)} · page ready ${loadMs} ms (DOMContentLoaded ${timing.dcl.toFixed(0)} ms, load ${timing.load.toFixed(0)} ms)`);
+  await listRead(page); await page.waitForTimeout(300);
+  assert.deepEqual(page.net.log, ['mpc'], `dist requests at load: ${page.net.log}`);
+
+  // Sticky group heads: the list rests on whole rows, so no row is left half under a stuck head (the previous group's last
+  // row peeking out beneath it), wherever a wheel, a scrollTop or a selection leaves the list, its end included.
+  const lb = await page.locator('#target-list').boundingBox();
+  const slivers = () => ev(page, () => {
+    const L = document.getElementById('target-list'), lr = L.getBoundingClientRect(), out = [];
+    for (const h of L.querySelectorAll('.group-head')) {
+      const hr = h.getBoundingClientRect();
+      if (hr.bottom <= lr.top || hr.top >= lr.bottom) continue;
+      for (const r of L.querySelectorAll('.row-target, .more')) {
+        const rr = r.getBoundingClientRect();
+        if (rr.top < hr.bottom - .5 && rr.bottom > hr.bottom + .5 && rr.bottom > lr.top) out.push(`${r.dataset.id || r.textContent} ${rr.top.toFixed(1)}–${rr.bottom.toFixed(1)} under ${h.dataset.group} ${hr.top.toFixed(1)}–${hr.bottom.toFixed(1)}`);
+      }
+    }
+    return { st: L.scrollTop, max: L.scrollHeight - L.clientHeight, out };
+  });
+  await page.mouse.move(lb.x + 120, lb.y + 200);
+  const rests = [];
+  for (const dy of [37, 53, 100, 211, 95, 400, 17, 5000, -333, -71]) { await page.mouse.wheel(0, dy); await page.waitForTimeout(450); rests.push(await slivers()); }
+  for (const st of [262, 500, 731]) { await ev(page, x => { document.getElementById('target-list').scrollTop = x; }, st); await page.waitForTimeout(300); rests.push(await slivers()); }
+  await ev(page, () => window.__cle.select('tiandu-1')); await page.waitForTimeout(400); rests.push(await slivers());
+  await ev(page, () => window.__cle.select(null)); await settle(page);
+  // Situation's regime rows jump to their group (scrollToRegime), which lands on the head's snap position
+  const jumps = [];
+  for (const key of ['SE_L2', 'EARTH_NEAR_HELIO', 'LUNAR_ORBIT']) {
+    await page.locator(`#situation [data-regime="${key}"] button`).click(); await page.waitForTimeout(450);
+    jumps.push(await ev(page, k => { const L = document.getElementById('target-list'), top = L.getBoundingClientRect().top, max = L.scrollHeight - L.clientHeight;
+      const h = [...L.querySelectorAll('.group-head')].find(h => [...h.parentElement.querySelectorAll('.row-target')].some(r => window.__cle.world.byId.get(r.dataset.id)?.regime.key === k));
+      return { key: k, group: h?.dataset.group, dy: h ? h.parentElement.getBoundingClientRect().top - top : NaN, st: L.scrollTop, max }; }, key));
+    rests.push(await slivers());
+  }
+  for (const j of jumps) assert.ok(j.group && (Math.abs(j.dy) <= 4.5 || j.st === j.max && j.dy > 0), `Situation ${j.key} → its group at the top of the list: ${JSON.stringify(j)}`);
+  await ev(page, () => { document.getElementById('target-list').scrollTop = 0; }); await parkMouse(page); await settle(page);
+  assert.ok(rests.some(x => x.st === x.max) && rests.some(x => x.st > 0 && x.st < x.max), `rest offsets ${rests.map(x => x.st)}`);
+  assert.deepEqual(rests.flatMap(x => x.out), [], 'rows half under a sticky group head');
+  ok('sticky group heads', `${rests.length} rest positions (${rests.map(x => x.st).join(', ')} of ${rests[0].max} px): no row under a stuck head; Situation rows jump to ${jumps.map(j => j.group).join(', ')}`);
   // Opening view (V1 + V5 + C1 on the real catalog), then the L1–L2 preset
   let v = await view(page);
   if (feature('V1 opening view (dist)', v.earthPx > 4, `Earth ${v.earthPx.toFixed(2)} px`)) {
@@ -914,16 +1272,21 @@ async function dist() {
   await page.keyboard.press('Escape'); await settle(page);
   await ev(page, () => { const c = window.__cle; c.select(null); c.focusOn('earth'); }); await settle(page);
 
-  // A NEOCP object with its tracklets (the identified target with the most tracklets)
+  // Catalog tracklets, now in the chunk payloads (no neocp.js): the identified targets with astrometry, FH-013 S2 the
+  // one with the most; selected, every bead of it shows, with its station chips.
   const neo = await ev(page, () => { const c = window.__cle, ids = c.tracklets.items.reduce((m, x) => m.set(x.id, (m.get(x.id) || 0) + x.n), new Map());
     const id = [...ids.entries()].sort((a, b) => b[1] - a[1]).find(([i]) => c.world.byId.get(i)?.track)?.[0];
-    c.setFrame('eci'); c.select(id); c.focusOn(id); return { id, dots: ids.get(id), items: c.tracklets.items.filter(x => x.id === id).length }; });
+    c.setFrame('eci'); c.select(id); c.focusOn(id);
+    return { id, dots: ids.get(id), items: c.tracklets.items.filter(x => x.id === id).length, with: [...ids.keys()].sort(), sources: [...new Set(c.tracklets.items.map(x => c.world.byId.get(x.id)?.source))] }; });
   await settle(page); await page.waitForTimeout(200);
-  assert.ok(neo.id && neo.dots > 0, JSON.stringify(neo));
+  assert.deepEqual(neo.with, ['falcon-heavy-013-stage-2', 'multijunk', 'spektr-rg', 'tiandu-1'], 'catalog targets with tracklets');
+  assert.ok(neo.id === 'falcon-heavy-013-stage-2' && neo.items === 47 && neo.dots > 0 && neo.sources.join() === 'catalog', JSON.stringify(neo));
   const neoShown = await ev(page, id => { const t = window.__cle.tracklets, L = t.layers.find(x => x.id === id), tk = t.by.get(id).tk; return L.g.visible ? tk.slice(...L.shown).reduce((m, x) => m + x.d1 - x.d0, 0) : 0; }, neo.id);
   assert.equal(neoShown, neo.dots, 'a selected target shows every bead (its trail is the whole window)');
-  ok('NEOCP tracklets', `${neo.id}: ${neo.items} tracklets, ${neo.dots} dots`);
-  await shot(page, 'dist-neocp');
+  const fhChips = await ev(page, () => document.querySelectorAll('#readout .stations .stn[data-station]').length);
+  assert.ok(fhChips >= 30, `${fhChips} station chips`);
+  ok('catalog tracklets', `${neo.with.join(', ')}; ${neo.id}: ${neo.items} tracklets, ${neo.dots} beads all shown when selected, ${fhChips} station chips`);
+  await shot(page, 'dist-tracklets');
 
   // Scale cues (V12) on the Earth preset: GEO ring + scale bar
   await ev(page, () => { const c = window.__cle; c.select(null); c.setFrame('se'); c.preset('earth'); }); await settle(page);
@@ -936,10 +1299,10 @@ async function dist() {
     await ev(page, () => document.querySelector('[data-layer="rings"]').click());
   }
 
-  await ev(page, () => { const c = window.__cle; c.select(null); c.setFrame('se'); c.focusOn('earth'); c.setChip('t2', true); c.setChip('nat', true); c.preset('wide'); });
+  await ev(page, () => { const c = window.__cle; c.select(null); c.setFrame('se'); c.focusOn('earth'); c.setChip('t2', true); c.preset('wide'); });
   const t2 = await ev(page, () => window.__cle.world.targets.filter(T => T.tier === 2 && window.__cle.isVisible(T)).length);
   assert.ok(t2 > 0);
-  ok('tier 2 + natural on', `${t2} tier-2 targets visible`);
+  ok('tier 2 on', `${t2} tier-2 targets visible`);
   await shot(page, 'dist-tier2');
   await shot(page, 'dist-legend', '#legend');
   const ms = await ev(page, () => window.__cle.probe(60));

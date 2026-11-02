@@ -1,0 +1,17 @@
+/* Timeline marks (web/ui/timeline.js; design §5, row 2). The shell places #timeline-marks over the rail and under the
+   native input#timeline, inset by half the 12 px thumb at each end, so a fraction --f of its width is the thumb centre at
+   that epoch. y px: "now" label −4–6 (in the 8 px gap above the track, clear of the thumb's ring at 5) and tracklet
+   ticks 6–10, observation bars 11–21 (on the rail, 12–20), coverage band 22–25, day ticks 26–32, date labels 32–44. */
+#timeline-marks>*{position:absolute;left:calc(var(--f) * 100%)}
+#timeline-marks .tkt{top:6px;width:1px;height:4px;background:var(--ink)}
+#timeline-marks .obs{top:11px;width:3px;height:10px;margin-left:-1px;border-radius:1px;background:var(--neocp)}
+#timeline-marks .obs.sel{outline:1px solid var(--ink)}
+#timeline-marks .cov{top:22px;width:calc(var(--w) * 100%);height:3px;border-radius:1px;--c:var(--dim);background:var(--c)}
+#timeline-marks .cov.extrap{background:repeating-linear-gradient(90deg,var(--warn) 0 4px,transparent 4px 7px)}
+#timeline-marks .tick{top:26px;width:1px;height:3px;background:var(--muted);opacity:.6}
+#timeline-marks .tick.maj{height:6px;opacity:1}
+#timeline-marks .tlab{top:32px;transform:translateX(-50%);font-size:10px;line-height:12px;color:var(--muted);white-space:nowrap}
+#timeline-marks .nowm{top:10px;width:1px;height:16px;background:var(--live)}
+/* z-index 1 + a --bg halo; lifted 4 px so in LIVE the playhead thumb (y 7–25, ring 5–27) stays whole under it */
+#timeline-marks .nowl{top:-4px;left:clamp(9px,calc(var(--f) * 100%),calc(100% - 9px));transform:translateX(-50%);z-index:1;
+  font-size:10px;line-height:10px;letter-spacing:.06em;color:var(--live);white-space:nowrap;text-shadow:0 0 2px var(--bg),0 0 2px var(--bg)}

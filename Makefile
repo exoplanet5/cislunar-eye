@@ -1,10 +1,10 @@
 # cislunar-eye build (ARCHITECTURE.md §13). Every Python step runs with -I; CLE_NOW (ISO UTC) pins "now".
 #   make daily            network refresh + offline rebuild + tests   (unattended: ops/run.sh daily)
-#   make update-neocp     hourly live NEOCP -> dist/data/neocp.js    (unattended: ops/run.sh update-neocp)
 #   make build            offline: dist/data/*.js + dist/index.html
 #   CLE_NOW=2026-10-21T13:00:00Z make states export validate
 # One make = one window: CLE_NOW is fixed once here (wall clock floored to the hour when unset or empty, DW-01) and
-# exported to every step; each target echoes it. ops/run.sh pins the hourly update-neocp to the daily's window.
+# exported to every step; each target echoes it. NEOCP objects are not scheduled: the viewer requests them one
+# designation at a time; `make neocp-live` is a manual refresh of the catalog source neocp.tsv only.
 PY    ?= $(HOME)/.venvs/astro313/bin/python
 NODE  ?= node
 CLE   := $(PY) -I scripts/cle.py
@@ -21,10 +21,12 @@ EXTRACT_FLAGS ?=
 # make sweep re-probes Horizons only when the audit table's sweep is older than this (days); FORCE=1 re-probes now
 SWEEP_MAX_AGE_D ?= 7
 LAUNCHD := $(HOME)/Library/LaunchAgents
-AGENTS  := com.cislunar-eye.neocp com.cislunar-eye.daily
+AGENTS  := com.cislunar-eye.daily
+# the retired hourly update-neocp agent: install-launchd and uninstall-launchd unload it and remove its plist
+LEGACY  := com.cislunar-eye.neocp
 
-.PHONY: now setup extract sweep catalog neocp-live update-horizons update-gp update-fits update-neocp tles-status \
-        states export validate site build test test-browser sanity status open publish install-launchd uninstall-launchd \
+.PHONY: now setup extract sweep catalog neocp-live update-horizons update-gp update-fits tles-status \
+        states export validate site build test test-browser sanity status open serve publish install-launchd uninstall-launchd \
         prune prune-apply all daily
 
 now:
@@ -48,7 +50,7 @@ catalog:                              # validate the merged sources (C4), merge,
 	$(PY) -I scripts/build_master.py --now $(DATE)
 	-git diff --stat -- catalog/
 
-neocp-live:                           # network, non-fatal: live NEOCP objects -> catalog/sources/neocp.tsv (daily)
+neocp-live:                           # manual, network, non-fatal: refresh catalog/sources/neocp.tsv (not in daily; then make catalog)
 	$(NOW)
 	-$(PY) -I scripts/neocp_live.py
 
@@ -65,12 +67,6 @@ update-fits:                          # local find_orb re-runs, only when script
 	@if [ "$(FORCE)" = 1 ] || [ ! -f scripts/fits_changed.py ]; then rc=0; else $(PY) -I scripts/fits_changed.py; rc=$$?; fi; \
 	case $$rc in 0) $(CLE) states --adapter fo && { test ! -f scripts/fits_changed.py || $(PY) -I scripts/fits_changed.py --mark || true; } ;; \
 	              1) echo "update-fits: neocpsat inputs unchanged (FORCE=1 to rerun)" ;; *) exit $$rc ;; esac
-
-update-neocp:                         # hourly: live NEOCP -> fo -> tracklets -> dist/data/neocp.js only (manifest: its entry)
-	$(NOW)
-	$(PY) -I scripts/neocp_live.py
-	$(CLE) states --adapter neocp
-	$(CLE) export --neocp-only
 
 tles-status:                          # read-only, non-fatal: never fetches into or pulls ~/tles
 	$(NOW)
@@ -108,11 +104,14 @@ sanity:                               # numerical checks of dist/data (frames, L
 	$(NOW)
 	$(PY) -I scripts/sanity_check.py > /dev/null; s=$$?; cat build/sanity_check.md | tail -4; exit $$s
 
-status:                               # data ages (wall clock); exit 1 when the NEOCP snapshot > 3 h or the last daily > 36 h
+status:                               # data ages (wall clock); exit 1 when the last daily > 36 h old (or failed)
 	$(PY) -I scripts/status.py
 
 open:
 	open dist/index.html
+
+serve:                                # local helper: dist/ + the on-request NEOCP API on http://127.0.0.1:8765/ (scripts/serve.py; Ctrl-C stops)
+	$(PY) -I scripts/serve.py
 
 publish:                              # push the built page (dist/index.html + dist/data) to gh-pages -> GitHub Pages; manual, after a refresh
 	$(NOW)
@@ -127,18 +126,19 @@ prune-apply:                          # keep the stamps build/ references (+ the
 	$(PY) -I scripts/prune.py --apply
 
 install-launchd:                      # opt-in (ARCHITECTURE Q8): copy ops/launchd/*.plist to ~/Library/LaunchAgents and load them
-	@echo "installing $(AGENTS) into $(LAUNCHD): hourly update-neocp at :45, daily at 01:30 local, via ops/run.sh (logs: work/logs/)"
+	@echo "installing $(AGENTS) into $(LAUNCHD): daily at 01:30 local, via ops/run.sh (logs: work/logs/)"
 	mkdir -p $(LAUNCHD) work/logs
+	for a in $(LEGACY); do launchctl bootout gui/$$(id -u)/$$a 2>/dev/null; rm -f $(LAUNCHD)/$$a.plist; done
 	for a in $(AGENTS); do cp ops/launchd/$$a.plist $(LAUNCHD)/$$a.plist; launchctl bootout gui/$$(id -u)/$$a 2>/dev/null; \
 	  launchctl bootstrap gui/$$(id -u) $(LAUNCHD)/$$a.plist; done
 	launchctl list | grep cislunar-eye
 
-uninstall-launchd:                    # unload the agents and remove the plists; nothing else changes
-	@echo "unloading $(AGENTS) and removing them from $(LAUNCHD)"
-	for a in $(AGENTS); do launchctl bootout gui/$$(id -u)/$$a 2>/dev/null; rm -f $(LAUNCHD)/$$a.plist; done
+uninstall-launchd:                    # unload the agents (and the legacy hourly one) and remove the plists; nothing else changes
+	@echo "unloading $(AGENTS) $(LEGACY) and removing them from $(LAUNCHD)"
+	for a in $(AGENTS) $(LEGACY); do launchctl bootout gui/$$(id -u)/$$a 2>/dev/null; rm -f $(LAUNCHD)/$$a.plist; done
 
 all: states export validate site     # then: make test test-browser sanity
 
-daily: neocp-live extract sweep catalog update-horizons update-gp tles-status update-fits states export validate site test sanity test-browser  # then prune (EFF-9), non-fatal
+daily: extract sweep catalog update-horizons update-gp tles-status update-fits states export validate site test sanity test-browser  # then prune (EFF-9), non-fatal
 	$(NOW)
 	-$(PY) -I scripts/prune.py --apply

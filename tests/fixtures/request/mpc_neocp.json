@@ -1,0 +1,8 @@
+[
+ {"Temp_Desig": "C46FX01", "Score": 97, "Discovery_year": 2026, "Discovery_month": 10, "Discovery_day": 19.3, "R.A.": 2.4518, "Decl.": 11.2734, "V": 19.8, "Updated": "Updated Oct. 21.52 UT", "NObs": 10, "Arc": 1.13, "H": 31.2, "Not_Seen_dys": 2.083},
+ {"Temp_Desig": "ZTF10Gu", "Score": 100, "Discovery_year": 2026, "Discovery_month": 10, "Discovery_day": 22.3, "R.A.": 23.8013, "Decl.": -12.6349, "V": 19.4, "Updated": "Added Oct. 22.43 UT", "NObs": 3, "Arc": 0.02, "H": 21.0, "Not_Seen_dys": 0.227},
+ {"Temp_Desig": "P22rAEs", "Score": 99, "Discovery_year": 2026, "Discovery_month": 10, "Discovery_day": 22.3, "R.A.": 1.791, "Decl.": 23.9948, "V": 21.0, "Updated": "Added Oct. 22.42 UT", "NObs": 4, "Arc": 0.04, "H": 21.7, "Not_Seen_dys": 0.202},
+ {"Temp_Desig": "X91537", "Score": 88, "Discovery_year": 2026, "Discovery_month": 10, "Discovery_day": 21.6, "R.A.": 1.954, "Decl.": 16.9541, "V": 19.5, "Updated": "Added Oct. 22.50 UT", "NObs": 3, "Arc": 0.01, "H": 20.3, "Not_Seen_dys": 0.936},
+ {"Temp_Desig": "A11dZee", "Score": 41, "Discovery_year": 2026, "Discovery_month": 10, "Discovery_day": 20.4, "R.A.": 5.1102, "Decl.": -3.5102, "V": 20.6, "Updated": "Updated Oct. 22.21 UT", "NObs": 7, "Arc": 1.92, "H": 24.6, "Not_Seen_dys": 1.12},
+ {"Temp_Desig": "ST26b21", "Score": 12, "Discovery_year": 2026, "Discovery_month": 10, "Discovery_day": 18.2, "R.A.": 9.4471, "Decl.": 31.0042, "V": 99.9, "Updated": "Updated Oct. 21.05 UT", "NObs": 5, "Arc": 2.87, "H": 26.1, "Not_Seen_dys": 3.4}
+]

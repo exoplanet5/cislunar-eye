@@ -7,121 +7,469 @@
 <title>Cislunar Eye</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23101418'/%3E%3Ccircle cx='24' cy='34' r='11' fill='%233987e5'/%3E%3Ccircle cx='50' cy='22' r='4' fill='%23c1c7ce'/%3E%3Cpath d='M8 46 Q32 4 58 30' fill='none' stroke='%23ffd54f' stroke-width='2'/%3E%3C/svg%3E">
 <style>
-/* MMX workspace and halo labels; cislunar-eye list, chips and readouts. Colours: web/theme.css tokens (inlined below); type ≥ 10 px
-   except the tier tags and the credit (review V11). */
-:root{color-scheme:dark;--mono:Menlo,"SF Mono",Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI",sans-serif}
-*{box-sizing:border-box}html,body{margin:0;height:100%;width:100%;background:var(--bg);color:var(--ink)}body{font:12px/1.5 var(--mono);display:flex;flex-direction:column;overflow:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}button,input,select{font:inherit;color:inherit}button,select,input[type=search]{background:var(--raised);border:1px solid var(--line);border-radius:4px;padding:6px 9px}button{cursor:pointer}button:hover{border-color:var(--accent-soft)}button:disabled{opacity:.4;cursor:default}button.active,button[aria-pressed=true]{border-color:var(--accent)}button.primary{background:var(--accent);color:var(--surface);font-weight:700;border-color:var(--accent);min-width:74px}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}a{color:var(--accent-soft)}[hidden]{display:none!important}
-.topbar{flex:none;min-height:44px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);padding-block:5px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--bg)}.identity{display:flex;align-items:center;gap:10px}.monogram{font:700 18px/1 var(--sans);letter-spacing:-.04em;color:var(--sun)}.identity h1{font:600 12px/1.25 var(--sans);margin:0}.eyebrow{font-size:10px;line-height:1.3;letter-spacing:.08em;color:var(--dim);text-transform:uppercase}.top-clock{font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink);white-space:nowrap}.live-badge{font-size:10px;letter-spacing:.1em;padding:2px 6px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}.live-badge.on{color:var(--live);border-color:var(--live)}.top-actions{margin-left:auto;display:flex;gap:7px}.panel-toggle{padding:4px 9px;font-size:11px;white-space:nowrap}.panel-toggle[aria-pressed=true]{border-color:var(--accent);color:var(--accent-soft)}
-.workspace{--left-w:300px;--right-w:264px;display:grid;grid-template-columns:var(--left-w) minmax(0,1fr) var(--right-w);grid-template-rows:auto minmax(0,1fr);flex:1;min-height:0;position:relative}.time-panel{grid-column:1;grid-row:1;grid-template-columns:minmax(0,1fr);padding:14px 16px 12px;background:var(--panel);border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:grid;gap:8px}.left{grid-column:1;grid-row:2}#scene{grid-column:2;grid-row:1/-1}.side.right{grid-column:3;grid-row:1/-1}.side{min-width:0;overflow:auto;padding:14px 16px;background:var(--panel)}.left{border-right:1px solid var(--line)}.side.right{border-left:1px solid var(--line)}.section{padding-block:12px;border-top:1px solid var(--line)}.section:first-of-type{padding-top:0;border-top:0}h2{font-size:10px;color:var(--dim);letter-spacing:.10em;text-transform:uppercase;margin:0 0 8px;font-weight:500}p{margin:6px 0;line-height:1.55}.fine{color:var(--dim);font-size:10px}.check{display:flex;align-items:center;gap:8px;padding:2px 0;color:var(--dim);font-size:11px}input[type=checkbox],input[type=range]{accent-color:var(--accent)}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.seg button{padding:6px 4px;font-size:10.5px}.view-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px}.view-grid button{padding:5px 3px;font-size:10px}details.section>summary{cursor:pointer;font-size:10px;color:var(--dim);letter-spacing:.10em;text-transform:uppercase;list-style-position:inside;margin-bottom:6px}.layer-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.inline{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;color:var(--dim)}.inline select{padding:3px 6px;font-size:11px}.inline input[type=range]{flex:1;min-width:0}
-.legend{font-size:10px;color:var(--dim);display:grid;gap:3px}.legend span{display:inline-flex;align-items:center;gap:5px}.legend .row{display:flex;flex-wrap:wrap;gap:2px 10px}.legend b{color:var(--ink);font-weight:400}.legend b.lp{color:var(--lagrange)}.lg-line{display:inline-block;width:18px;border-top:1.5px solid var(--dim)}.lg-line.dash{border-top-style:dashed;border-top-width:1px}.lg-line.dot{border-top-style:dotted;border-color:var(--dim);opacity:.8}.lg-line.dim{opacity:.55}.lg-line.sun{border-color:var(--sun)}.lg-line.cyan{border-color:var(--cyan)}.lg-line.sight{border-color:var(--sightline);opacity:.6}.legend .dimb,.glyphs .dimb{opacity:.55;font-style:normal}.lg-ring{display:inline-block;width:9px;height:9px;margin:0 2px;border:1px solid var(--dim);border-radius:50%;opacity:.7}.lg-trk{display:inline-block;width:18px;height:5px;background:radial-gradient(circle,var(--bead) 0 1.8px,transparent 2.3px) 0 50%/5px 5px no-repeat,radial-gradient(circle,var(--bead) 0 1.8px,transparent 2.3px) 100% 50%/5px 5px no-repeat,linear-gradient(var(--hairline),var(--hairline)) 50% 50%/100% 1px no-repeat}.glyphs .lg-trk,.glyphs .lg-ring{margin:0 4px 0 2px}.glyphs .nw{white-space:nowrap}.glyphs .swatch{margin:0 4px 0 2px}.glyphs .lg-lp{margin:0 7px 0 3px}.lg-lp{display:inline-block;width:6px;height:6px;margin:0 2px;border:1.3px solid var(--lagrange);transform:rotate(45deg);background:radial-gradient(circle,var(--lagrange) 0 1.1px,transparent 1.4px)}
-.foot-left{display:flex;align-items:flex-end;gap:10px;min-width:0}.foot-right{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:5px}.foot-right .scale-bar{position:static;order:-1}#scene-hint{white-space:nowrap}.hint-short,.touch-hint{display:none}.legend-chip{display:none;pointer-events:auto;padding:2px 8px;font-size:10px;border-radius:10px;color:var(--dim)}.help-chip{pointer-events:auto;flex:none;width:20px;height:20px;padding:0;border-radius:50%;font-size:11px;line-height:1;color:var(--dim)}.help-chip[aria-pressed=true]{color:var(--ink)}
-.help{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--scrim)}.help-box{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 18px 12px;width:min(100%,700px);max-height:100%;overflow:auto;font-size:11px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px}.help-box h2{margin:4px 0 6px}.keys{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;align-items:baseline}.keys dt{white-space:nowrap}.keys dd{margin:0;color:var(--dim)}kbd{font:10.5px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 5px;background:var(--raised);color:var(--ink)}.help-close{position:absolute;top:4px;right:6px;padding:0 6px;border:0;background:none;font-size:15px;color:var(--dim)}.glyphs{margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:10.5px;color:var(--dim)}.glyphs li{line-height:1.5}.glyphs b{color:var(--ink);font-weight:400;margin-right:4px}.glyphs .lg-line{margin:0 4px 0 2px}
-.chips{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}.chips button{padding:3px 8px;font-size:10.5px;border-radius:12px;color:var(--dim)}.chips button[aria-pressed=true]{color:var(--ink);background:var(--chip-on)}#search{width:100%;padding:6px 8px;font-size:11px}
-.target-list{display:grid;grid-template-columns:minmax(0,1fr);gap:1px}.group-head{display:flex;align-items:center;gap:6px;margin-top:8px;padding:3px 0;color:var(--dim);font-size:10px;letter-spacing:.04em;cursor:pointer;border-bottom:1px solid var(--line)}.group-head .gname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.group-head .count{color:var(--muted)}.eye{padding:0 3px;border:0;background:none;font-size:12px;line-height:1;color:var(--accent-soft)}.eye[aria-pressed=false]{color:var(--muted)}
-.row-target{display:grid;grid-template-columns:16px 8px minmax(0,1fr) auto auto 18px;align-items:center;gap:6px;padding:3px 2px;border-radius:3px;cursor:pointer;font-size:11px}.row-target:hover{background:var(--raised)}.row-target.selected{background:var(--row-sel);outline:1px solid var(--accent)}.row-target.off .name{color:var(--muted)}.row-target .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-target .st{color:var(--muted);margin-left:5px;font-size:10px}.row-target .tier{margin-left:5px;font-size:9px;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:0 3px}.row-target .tier.nat{color:var(--natural)}.badges{display:flex;gap:4px;align-items:center;font-size:10px;color:var(--muted)}.badges .src{font-weight:700;color:var(--dim)}.badges .warn{color:var(--warn)}.q-extrap{color:var(--warn)}.q-gp{color:var(--q-gp)}.q-fit{color:var(--q-fit)}.range{font-size:10px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.nd{grid-column:4/6;font-size:10px;color:var(--warn);border:1px dashed var(--warn-line);border-radius:3px;padding:0 4px;white-space:nowrap}.row-target .focus{padding:0;border:0;background:none;color:var(--muted);font-size:12px}.row-target .focus:hover{color:var(--accent-soft)}.swatch{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:0}
-#scene{position:relative;min-width:0;min-height:0;background:var(--surface);overflow:hidden}#scene canvas{display:block;outline:none;touch-action:none}#scene .label-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}.body-label,.sky-label{position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 4px var(--surface),0 0 4px var(--surface),0 0 2px var(--surface);pointer-events:none}.body-label{color:var(--ink);font:11px/1.3 var(--mono)}.body-label.lagrange{color:var(--lagrange);font-size:10px}.body-label.dim{color:var(--dim)}.body-label.sel{color:var(--sel-ink);font-weight:700}.body-label.body{color:var(--moon)}.sky-label{color:var(--muted);font:10px/1.3 var(--mono)}.sky-label.star-name{color:var(--muted);font-size:10px}.sky-label.constellation-name{color:var(--constellation);font-size:10px;opacity:.6;letter-spacing:.04em}.sky-label.grid-label{color:var(--muted);font-size:10px}
-.scene-title{position:absolute;top:14px;left:18px;max-width:calc(100% - 36px);pointer-events:none;z-index:2;text-shadow:0 0 5px var(--surface)}.scene-title strong{font:500 13px var(--sans)}.scene-title .clock{display:block;font:500 12px var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}.scene-title p{font-size:10px;color:var(--dim);margin-top:3px}.scene-foot{position:absolute;left:18px;right:18px;bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;font-size:10px;color:var(--dim);pointer-events:none;z-index:2;text-shadow:0 0 5px var(--surface)}.scene-credit{position:absolute;right:14px;bottom:8px;font-size:8.5px;color:var(--muted);pointer-events:none;z-index:2;text-shadow:0 0 5px var(--surface),0 0 3px var(--surface)}
-.sun-indicator{position:absolute;left:0;top:0;z-index:2;pointer-events:none;display:flex;align-items:center;gap:5px;font-size:10px;color:var(--sun);text-shadow:0 0 4px var(--surface)}.sun-indicator i{display:block;width:10px;height:10px;border-radius:50%;background:var(--sun);box-shadow:0 0 8px color-mix(in srgb,var(--sun) 53%,transparent)}.sun-indicator.right{flex-direction:row-reverse}.sun-indicator.edge i{width:0;height:0;border-radius:0;background:none;box-shadow:none;border-left:12px solid var(--sun);border-top:3.5px solid transparent;border-bottom:3.5px solid transparent}.edge-marker{position:absolute;left:0;top:0;z-index:2;display:flex;align-items:center;gap:5px;padding:0;border:0;background:none;font:10px var(--mono);white-space:nowrap;text-shadow:0 0 4px var(--surface),0 0 3px var(--surface)}.edge-marker span,.sun-indicator span{background:var(--scrim);border-radius:3px;padding:0 3px}.edge-marker:hover span{text-decoration:underline}.edge-marker i{display:block;width:0;height:0;border-left:12px solid currentColor;border-top:3.5px solid transparent;border-bottom:3.5px solid transparent}.edge-marker.right{flex-direction:row-reverse}.muted{color:var(--muted)}
-.tooltip{position:absolute;z-index:4;pointer-events:none;background:var(--tooltip-bg);border:1px solid var(--line);border-radius:4px;padding:5px 8px;font-size:10.5px;max-width:280px;line-height:1.45}.tooltip b{font-weight:600}.tooltip .fine{margin:0}.banner{position:absolute;top:14px;right:18px;max-width:min(44%,420px);z-index:3;background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn);font-size:10.5px;padding:5px 10px;border-radius:4px;max-width:80%}
-.stations{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 2px}.stn{display:inline-flex;align-items:center;gap:4px;font-size:10px;line-height:1.6;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:0 7px 0 5px}.stn i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--c);box-shadow:0 0 0 1.5px var(--surface)}.stn small{font-size:10px;color:var(--muted)}
-#loading,#render-error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;background:var(--surface);z-index:5}#render-error{display:block;padding-top:15%;overflow:auto}
-.metric{padding-block:12px;border-bottom:1px solid var(--line)}.metric:first-of-type{padding-top:2px}.metric h2{margin-bottom:10px}.time-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.time-head h2{margin:0}.mini-clock{display:none;font-size:11px;font-variant-numeric:tabular-nums}.transport{display:flex;align-items:center;gap:5px}.transport>*{min-width:0}.transport #play{flex:1}.transport button,.transport select{padding:5px 7px}#live[aria-pressed=true]{color:var(--live);border-color:var(--live)}.slider-row{display:flex;align-items:center;gap:6px}#timeline{flex:1;min-width:0;width:100%;height:20px;margin:0}.timeline-ends{display:flex;justify-content:space-between;font-size:10px;color:var(--dim)}.step-row{display:flex;gap:4px}.step-row button{flex:1;padding:4px 4px;font-size:10.5px}
-.utc-big{display:block;font-variant-numeric:tabular-nums}.utc-big .d{display:block;font-size:12px;color:var(--dim)}.utc-big .t{display:block;font:500 26px/1.2 var(--mono);letter-spacing:-.03em}.elapsed{color:var(--dim);font-size:10px;margin-top:3px}.data-list{display:grid;grid-template-columns:1fr 1fr;gap:10px 10px;margin:0}.datum{min-width:0}.datum.wide{grid-column:1/-1}.datum dt{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}.datum dd{margin:0;font:500 12.5px/1.3 var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.datum dd small{font-size:10px;color:var(--dim);margin-left:4px;font-weight:400}.datum.hero dd{font:500 22px/1.15 var(--sans);letter-spacing:-.02em}.datum .aside{display:block;font:10px/1.5 var(--mono);color:var(--dim);letter-spacing:0}.datum dd.radec{white-space:nowrap;font-size:12px;letter-spacing:-.02em}.sel-name{font:600 14px/1.3 var(--sans);display:flex;gap:8px;align-items:center}.fine.warn{color:var(--warn)}.fine.notes{overflow-wrap:anywhere}.caveat{font-size:10.5px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line-soft);border-radius:3px;padding:5px 7px}.notes{max-height:90px;overflow:auto}.counts{width:100%;border-collapse:collapse;font-size:10.5px}.counts th{font-weight:400;color:var(--muted);text-align:right;font-size:10px}.counts th:first-child,.counts td:first-child{text-align:left}.counts td{text-align:right;padding:2px 0;color:var(--dim)}.counts td:first-child{color:var(--ink)}.counts .swatch{margin-right:6px}.mini{margin:0;padding-left:0;list-style:none;font-size:10.5px;display:grid;gap:2px}.mini li{cursor:pointer;color:var(--dim)}.mini li:hover{color:var(--ink)}
-.about summary{cursor:pointer;font-size:10px;color:var(--dim);letter-spacing:.10em;text-transform:uppercase;list-style-position:inside}.about[open] summary{margin-bottom:8px}.about p{font-size:10.5px;line-height:1.55;color:var(--dim)}.about p strong{color:var(--ink);font-weight:500}.about sub,.about sup{font-size:10px}.panel-close{display:none}
-@media(min-width:981px){.workspace.no-right{grid-template-columns:var(--left-w) minmax(0,1fr)}.workspace.no-right .side.right{display:none}.workspace.no-left{grid-template-columns:minmax(0,1fr) var(--right-w);grid-template-rows:minmax(0,1fr) auto}.workspace.no-left.no-right{grid-template-columns:minmax(0,1fr)}.workspace.no-left .left{display:none}.workspace.no-left #scene{grid-column:1;grid-row:1}.workspace.no-left .side.right{grid-column:2;grid-row:1}}.workspace.time-bar .time-panel{grid-column:1/-1;grid-row:2;border-right:0;border-bottom:0;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding-block:7px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--bg)}.time-bar .time-head h2{display:none}.time-bar .mini-clock{display:inline}.time-bar .transport #play{flex:none}.time-bar .slider-row{order:5;flex:1 1 100%}.time-bar .timeline-ends{display:none}.time-bar .step-row button{flex:none}
-@media(max-width:1150px){.workspace{--left-w:270px;--right-w:236px}.side,.time-panel{padding:12px 12px}.eyebrow{display:none}.utc-big .t{font-size:23px}}
-@media(max-width:980px){.workspace{grid-template-columns:minmax(0,1fr) var(--right-w);grid-template-rows:minmax(0,1fr) auto}#scene{grid-column:1;grid-row:1}.side.right{grid-column:2;grid-row:1}.side.right #close-info{display:none}.left{grid-column:auto;grid-row:auto;display:none;position:absolute;left:12px;top:10px;bottom:10px;width:300px;z-index:10;border:1px solid var(--line);border-radius:6px}.left.open{display:block}.panel-close{display:block;float:right;padding:2px 7px}.identity h1{display:none}}
-@media(max-width:700px){.workspace{grid-template-columns:minmax(0,1fr)}.side.right{grid-column:auto;grid-row:auto;display:none;position:absolute;right:12px;left:12px;top:10px;bottom:10px;z-index:10;border:1px solid var(--line);border-radius:6px}.side.right.open{display:block}.side.right #close-info{display:block}.left{width:calc(100% - 24px)}.topbar{gap:8px}.toggle-label,.top-clock{display:none}.scene-title{top:12px;left:14px}#view-description{display:none}.scene-foot{left:14px;right:14px;bottom:22px}#scene-hint{display:none}.legend{display:none}.legend.open{display:grid;position:absolute;left:0;right:0;bottom:30px;padding:8px 10px;background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:6px}.legend-chip{display:inline-block}.legend .row{gap:1px 8px}.scene-credit{font-size:8px}.banner{top:60px;left:14px;right:14px;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 8px}.banner::before{content:"⚠ "}.help-box{grid-template-columns:1fr}.mouse-hint{display:none}.touch-hint{display:block}}
-@media(max-width:1600px){.hint-long{display:none}.hint-short{display:inline}}@media(max-width:980px){#scene-hint{display:none}}@media(min-width:981px){.top-clock{display:none}}
-@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+/* Shell chrome: title bar, stage (head, banner, scene overlays, time dock), panel frames, help, phone tabs and sheets.
+   Colours are web/theme.css tokens (inlined after this block, then the lane sheets web/css/*.css); regime colours arrive
+   at runtime as an inline --c and :root --neocp. Type ≥ 10 px. Breakpoints: 1600 / 1280 / 1180 / 1100 (mid) / 900 /
+   700 (phone); app.js layout() matches 1100 and 700. */
+:root{color-scheme:dark;--mono:Menlo,"SF Mono",Consolas,monospace;--left-w:304px;--right-w:304px;--tb-h:40px;--row:24px;--ctl:24px}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;width:100%;background:var(--bg);color:var(--ink)}
+body{font:11px/16px var(--mono);font-variant-numeric:tabular-nums;display:grid;grid-template-rows:var(--tb-h) minmax(0,1fr);overflow:hidden;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+button,input,select,output{font:inherit;color:inherit}
+button,select{height:var(--ctl);padding:0 8px;background:var(--raised);border:1px solid var(--line);border-radius:3px;cursor:pointer;white-space:nowrap}
+button:hover,select:hover{border-color:var(--accent-soft)}
+button:disabled{opacity:.4;cursor:default}
+button:disabled:hover{border-color:var(--line)}
+button[aria-pressed=true]{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:700}
+button.ghost{background:none;border-color:transparent;color:var(--muted);padding:0 4px}
+button.ghost:hover{color:var(--ink);border-color:var(--line)}
+button.mini{height:16px;padding:0 6px;font-size:10px;line-height:14px}
+:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+a{color:var(--accent-soft)}
+[hidden]{display:none!important}
+h1,h2,h3,h4,p{margin:0}
+kbd{font:10px/14px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 4px;background:var(--raised);color:var(--ink)}
+.k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.fine{font-size:10px;line-height:14px;color:var(--dim)}
+.note{font-size:10px;line-height:14px;color:var(--muted)}
+.fine.warn{color:var(--warn)}
+.caveat{font-size:10px;line-height:14px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line-soft);border-left:2px solid var(--warn);border-radius:3px;padding:6px 8px}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:8px;height:32px;flex:none}
+.ph h2{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.ph .aside{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ph .aside b{color:var(--ink);font-weight:400}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:3px;overflow:hidden;flex:none}
+.seg button{height:22px;border:0;border-radius:0;border-left:1px solid var(--line);background:var(--raised);color:var(--dim);padding:0 8px}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed=true]{background:var(--chip-on);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.seg button:focus-visible{outline-offset:-2px}
+.chip{height:22px;border-radius:11px;padding:0 8px;font-size:10px;color:var(--dim)}
+.chip span{color:var(--muted);margin-left:4px}
+.chip[aria-pressed=true]{color:var(--ink);background:var(--chip-on)}
+.chip[aria-pressed=true] span{color:var(--accent-soft)}
+.field{display:flex;align-items:center;height:24px;border:1px solid var(--line);border-radius:3px;background:var(--surface);min-width:0}
+.field:focus-within{border-color:var(--accent)}
+.field input{flex:1;min-width:0;height:22px;border:0;background:none;padding:0 8px;outline:none}
+.field input::placeholder{color:var(--muted)}
+.field input::-webkit-search-cancel-button{display:none}
+.lng,.sht,.l,.s{white-space:nowrap}.sht,.s{display:none}
+/* glyphs = the scene markers: colour = regime (--c), shape = object type, hollow = extrapolated / stale, dimmed = derelict */
+.g{display:block;flex:none;width:8px;height:8px;background:var(--c);justify-self:center}
+.g.pl{border-radius:50%}.g.rb{width:7px;height:7px}.g.db{width:6px;height:6px;transform:rotate(45deg)}
+.g.ho{background:none;border:1.5px solid var(--c)}.g.dr{opacity:.5}.g.nd{background:none;border:1px dashed var(--c);opacity:.7}
+.eye{width:16px;height:16px;padding:0;border:0;background:none;color:var(--accent-soft);font-size:11px;line-height:16px}
+.eye[aria-pressed=false]{color:var(--muted)}.eye:disabled{color:var(--line)}
+.swatch{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--c);vertical-align:0}
+
+/* title bar: three cells over the three workspace columns */
+.tb{display:grid;grid-template-columns:var(--left-w) minmax(0,1fr) var(--right-w);border-bottom:1px solid var(--line);background:var(--bg);min-width:0}
+body.no-left .tb{grid-template-columns:auto minmax(0,1fr) var(--right-w)}
+body.no-right .tb{grid-template-columns:var(--left-w) minmax(0,1fr) auto}
+body.no-left.no-right .tb{grid-template-columns:auto minmax(0,1fr) auto}
+.tb>div{display:flex;align-items:center;gap:8px;min-width:0}
+.tb-brand{padding:0 12px}
+.mark{font:700 16px/1 var(--mono);color:var(--sun)}
+.tb h1{font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.brand-sub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-mid{padding:0 16px;justify-content:space-between;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.clock{display:flex;align-items:center;gap:8px;white-space:nowrap;min-width:0}
+#utc-clock{display:flex;align-items:baseline;gap:6px}
+#utc-date{font-size:13px;color:var(--dim)}
+#utc-time{font-size:20px;line-height:24px;font-weight:700;letter-spacing:-.01em}
+.z{font-size:10px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;font-size:11px;letter-spacing:.08em;background:none;color:var(--dim)}
+.pill i{width:6px;height:6px;border-radius:50%;background:var(--live);box-shadow:0 0 6px var(--live)}
+.pill:not(.live) i{display:none}
+.pill.live{color:var(--live);border-color:var(--live);background:color-mix(in srgb,var(--live) 8%,transparent)}
+.pill.play{border-color:var(--accent);color:var(--accent-soft)}
+.pill[aria-disabled=true]{cursor:default}.pill[aria-disabled=true]:hover{border-color:var(--line)}
+#elapsed{font-size:10px;color:var(--muted)}#elapsed b{color:var(--dim);font-weight:400}
+.framesel{display:flex;align-items:center;gap:8px;flex:none}
+.tb-right{padding:0 12px;justify-content:flex-end}.tb>.tb-right{gap:4px}
+.tb-right button{color:var(--dim);font-size:10px}
+.panel-toggle[aria-pressed=true]{color:var(--accent-soft);background:var(--chip-on)}
+#help-toggle{min-width:24px;padding:0 6px}
+
+/* workspace: Targets | stage | Inspector */
+.workspace{display:grid;grid-template-columns:var(--left-w) minmax(0,1fr) var(--right-w);min-height:0;min-width:0;position:relative}
+body.no-left .workspace{grid-template-columns:minmax(0,1fr) var(--right-w)}
+body.no-right .workspace{grid-template-columns:var(--left-w) minmax(0,1fr)}
+body.no-left.no-right .workspace{grid-template-columns:minmax(0,1fr)}
+body.no-left #controls-panel,body.no-right #state-panel{display:none}
+.panel{background:var(--panel);min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#controls-panel{border-right:1px solid var(--line)}
+#state-panel{border-left:1px solid var(--line)}
+.sheet-grab{display:none}
+.neo{flex:none;position:relative;padding:0 12px 8px;border-bottom:1px solid var(--line)}
+.neo:empty{display:none}
+.tg{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 12px}
+.search{gap:6px;padding:0 4px 0 6px}
+.search>span{color:var(--muted)}
+.search input{padding:0;text-overflow:ellipsis}
+.search kbd{color:var(--dim)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.cols{display:grid;grid-template-columns:16px 10px minmax(0,1fr) 48px 60px 16px;column-gap:6px;align-items:center;flex:none;height:24px;margin-top:4px;border-bottom:1px solid var(--line);font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.cols .r{text-align:right}
+.list{flex:1;min-height:0;overflow:auto;margin:0 -12px;padding:0 12px 16px;scrollbar-width:thin;scrollbar-color:var(--line) transparent;-webkit-mask-image:linear-gradient(var(--ink) calc(100% - 16px),transparent);mask-image:linear-gradient(var(--ink) calc(100% - 16px),transparent)}
+.tabs{display:flex;align-items:center;flex:none;height:32px;padding:0 12px;border-bottom:1px solid var(--line)}
+.tabs [role=tablist]{display:flex;gap:16px;height:100%}
+.tab{height:32px;border:0;border-radius:0;background:none;padding:0;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected=true]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.tab .b{font-weight:400;letter-spacing:0;text-transform:none;margin-left:4px}
+.tab:disabled{opacity:.7;color:var(--muted)}
+.tab:focus-visible{outline-offset:-2px}
+.tab-nav{margin-left:auto;display:flex;gap:2px}
+.tab-nav button{height:20px;min-width:20px;font-size:12px}
+.ibody{flex:1;min-height:0;overflow:auto;padding:0 12px 16px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.about{padding-top:8px}
+.about p{font-size:11px;line-height:16px;color:var(--dim);margin:0 0 10px}
+.about p strong{color:var(--ink);font-weight:700}
+.about p.fine{font-size:10px;line-height:14px}
+.about sub,.about sup{font-size:10px}
+
+/* stage: head, banner, scene, time dock */
+.stage{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface)}
+.stage-head{position:relative;z-index:8;flex:none;display:flex;justify-content:space-between;align-items:center;gap:16px;height:40px;padding:0 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+.vtitle{flex:1 1 auto;min-width:0}
+#view-title{display:block;font-size:11px;line-height:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-description{font-size:10px;line-height:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.viewbar{display:flex;gap:8px;align-items:center;flex:none}
+#views button{font-size:10px;padding:0 7px}
+#views button.active{background:var(--chip-on);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+#view-select{display:none;height:24px;font-size:10px;padding:0 4px}
+.layers>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--line);border-radius:3px;background:var(--raised);font-size:10px;cursor:pointer;white-space:nowrap}
+.layers>summary::-webkit-details-marker{display:none}
+.layers>summary:hover,.layers[open]>summary{border-color:var(--accent)}
+.layers>summary span{color:var(--muted)}
+.pop{position:absolute;z-index:8;background:var(--panel);border:1px solid var(--line);border-radius:4px;box-shadow:0 12px 32px color-mix(in srgb,var(--surface) 85%,transparent)}
+.layers .pop{right:16px;top:44px;width:304px;padding:0 12px 10px}
+.lgh{margin-top:4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);line-height:20px}
+.lgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
+.chk{display:flex;align-items:center;gap:8px;height:24px;font-size:11px;color:var(--dim);white-space:nowrap;cursor:pointer}
+.chk:has(input:checked){color:var(--ink)}
+.chk.wide{grid-column:1/-1}
+.chk input,.lsel input{margin:0;accent-color:var(--accent)}
+.lsel{display:grid;grid-template-columns:104px minmax(0,1fr) 32px;gap:8px;align-items:center;height:28px;margin-top:4px;font-size:11px;color:var(--dim)}
+.lsel select{grid-column:2/4;height:22px;font-size:11px;padding:0 4px}
+.lsel output{text-align:right}
+.banner{flex:none;height:24px;line-height:23px;padding:0 16px;background:var(--warn-bg);border-bottom:1px solid var(--warn-line);color:var(--warn);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner::before{content:"⚠ "}
+#scene{position:relative;flex:1;min-height:0;min-width:0;overflow:hidden;background:var(--surface)}
+#scene canvas{display:block;outline:none;touch-action:none}
+#scene .label-layer{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.body-label,.sky-label{position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 4px var(--surface),0 0 4px var(--surface),0 0 2px var(--surface);pointer-events:none}
+.body-label{color:var(--ink);font:11px/1.3 var(--mono)}.body-label.lagrange{color:var(--lagrange);font-size:10px}.body-label.dim{color:var(--dim)}.body-label.sel{color:var(--sel-ink);font-weight:700}.body-label.body{color:var(--moon)}
+.sky-label{color:var(--muted);font:10px/1.3 var(--mono)}.sky-label.constellation-name{color:var(--constellation);opacity:.6;letter-spacing:.04em}
+.foot-right{position:absolute;right:16px;bottom:12px;z-index:2;pointer-events:none}
+.sun-indicator{position:absolute;left:0;top:0;z-index:2;pointer-events:none;display:flex;align-items:center;gap:5px;font-size:10px;color:var(--sun);text-shadow:0 0 4px var(--surface)}.sun-indicator i{display:block;width:10px;height:10px;border-radius:50%;background:var(--sun);box-shadow:0 0 8px color-mix(in srgb,var(--sun) 53%,transparent)}.sun-indicator.right{flex-direction:row-reverse}.sun-indicator.edge i{width:0;height:0;border-radius:0;background:none;box-shadow:none;border-left:12px solid var(--sun);border-top:3.5px solid transparent;border-bottom:3.5px solid transparent}
+.edge-marker{position:absolute;left:0;top:0;z-index:2;display:flex;align-items:center;gap:5px;height:auto;padding:0;border:0;background:none;font:10px var(--mono);white-space:nowrap;text-shadow:0 0 4px var(--surface),0 0 3px var(--surface)}.edge-marker span,.sun-indicator span{background:var(--scrim);border-radius:3px;padding:0 3px}.edge-marker:hover span{text-decoration:underline}.edge-marker i{display:block;width:0;height:0;border-left:12px solid currentColor;border-top:3.5px solid transparent;border-bottom:3.5px solid transparent}.edge-marker.right{flex-direction:row-reverse}
+.tooltip{position:absolute;z-index:4;pointer-events:none;background:var(--tooltip-bg);border:1px solid var(--line);border-radius:4px;padding:5px 8px;font-size:10.5px;max-width:280px;line-height:1.45}.tooltip b{font-weight:700}.tooltip .fine{margin:0}
+#loading,#render-error{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;background:var(--surface)}#render-error{display:block;padding-top:15%;overflow:auto}#render-error h2{font-size:12px;margin-bottom:8px}
+.help{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--scrim)}
+.help-box{position:relative;width:min(560px,100%);max-height:100%;overflow:auto;padding:0 16px 12px;background:var(--panel);border:1px solid var(--line);border-radius:4px;box-shadow:0 12px 32px color-mix(in srgb,var(--surface) 85%,transparent)}
+.help-box h2{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);line-height:32px}
+.keys{display:grid;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);gap:6px 12px;margin:0;align-items:center;font-size:11px}
+.keys dt{white-space:nowrap}.keys dd{margin:0;color:var(--dim)}
+.glyphs{margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:10.5px;line-height:15px;color:var(--dim)}
+.glyphs b{color:var(--ink);font-weight:400;margin-right:4px}
+.glyphs .nw{white-space:nowrap}.glyphs .swatch{margin:0 4px 0 2px}
+.help .fine{margin-top:10px;color:var(--muted)}
+.help-close{position:absolute;top:6px;right:8px;width:20px;height:20px;padding:0;font-size:14px}
+.touch-hint{display:none}
+
+/* time dock: transport, timeline, legend strip; the clock lives in the title bar */
+.dock{position:relative;flex:none;background:var(--bg);border-top:1px solid var(--line);padding:8px 16px 4px}
+.peek{display:none}
+.transport{display:flex;align-items:center;gap:16px;min-height:24px}
+.tgroup{display:flex;align-items:center;gap:4px}
+#play{min-width:76px}
+#speed{width:96px;padding:0 4px}
+.steps button{min-width:40px;color:var(--dim);padding:0 7px}
+#now[aria-pressed=true]{color:var(--live);border-color:var(--live);background:color-mix(in srgb,var(--live) 8%,transparent)}
+#reverse[aria-pressed=true]{background:var(--chip-on)}
+#time-info{margin-left:auto;min-width:0;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#time-info b{color:var(--dim);font-weight:400}
+.ti{display:inline-block;width:14px;height:4px;border-radius:1px;background:var(--c);vertical-align:1px;margin:0 4px 0 10px}
+.ti:first-child{margin-left:0}
+.ti.ex{background:repeating-linear-gradient(90deg,var(--warn) 0 4px,transparent 4px 7px)}
+.ti.obs{width:2px;height:10px;vertical-align:-1px}
+.tl{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;margin-top:8px}
+.tl .end{font-size:10px;line-height:12px;padding-top:10px;color:var(--dim);white-space:nowrap}
+.track{position:relative;height:44px;min-width:0;--p:0}
+.rail{position:absolute;left:6px;right:6px;top:12px;height:8px;border-radius:4px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.rail i{display:block;height:100%;width:calc(var(--p) * 100%);background:color-mix(in srgb,var(--accent) 28%,transparent)}
+#timeline-marks{position:absolute;left:6px;right:6px;top:0;height:44px;pointer-events:none}
+#timeline{position:absolute;left:0;right:0;top:7px;width:100%;height:18px;margin:0;padding:0;background:none;-webkit-appearance:none;appearance:none;cursor:pointer}
+#timeline:focus-visible{outline:none}
+#timeline::-webkit-slider-runnable-track{height:18px;background:none;border:0}
+#timeline::-moz-range-track{height:18px;background:none;border:0}
+#timeline::-webkit-slider-thumb{-webkit-appearance:none;box-sizing:border-box;width:12px;height:18px;border-radius:3px;background:var(--ink);border:2px solid var(--accent);box-shadow:0 0 0 2px var(--bg)}
+#timeline::-moz-range-thumb{box-sizing:border-box;width:12px;height:18px;border-radius:3px;background:var(--ink);border:2px solid var(--accent);box-shadow:0 0 0 2px var(--bg)}
+#timeline:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--focus)}
+#timeline:focus-visible::-moz-range-thumb{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--focus)}
+.legend-strip{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px;margin-top:4px;font-size:10px;line-height:14px;color:var(--dim)}
+.legend{display:grid;min-width:0}
+.legend .row{display:flex;flex-wrap:wrap;column-gap:12px;white-space:nowrap}
+.legend .row>span{display:inline-flex;align-items:center;gap:5px}
+.legend b{color:var(--ink);font-weight:400}
+.legend .dimb,.glyphs .dimb{opacity:.55;font-style:normal}
+.lg-line{display:inline-block;width:18px;border-top:1.5px solid var(--dim)}
+.lg-line.dash{border-top-style:dashed;border-top-width:1px}.lg-line.dot{border-top-style:dotted;border-top-width:2px;opacity:.85}.lg-line.dim{opacity:.55}
+.lg-line.sun{border-color:var(--sun)}.lg-line.sight{border-color:var(--sightline);opacity:.6}
+.lg-ring{display:inline-block;width:9px;height:9px;margin:0 2px;border:1px solid var(--dim);border-radius:50%;opacity:.7}
+.lg-trk{display:inline-block;width:18px;height:6px;background:radial-gradient(circle,var(--bead) 0 2px,transparent 2.5px) 0 50%/6px 6px no-repeat,radial-gradient(circle,var(--bead) 0 2px,transparent 2.5px) 100% 50%/6px 6px no-repeat,linear-gradient(var(--hairline),var(--hairline)) 50% 50%/100% 1px no-repeat}
+.lg-lp{display:inline-block;width:7px;height:7px;margin:0 2px;border:1.3px solid var(--lagrange);transform:rotate(45deg);background:radial-gradient(circle,var(--lagrange) 0 1.1px,transparent 1.4px)}
+.strip-right{display:grid;grid-template-rows:14px 14px;justify-items:end}
+#scene-hint{grid-row:1;color:var(--muted);white-space:nowrap}
+.hint-short{display:none}
+.scene-credit{grid-row:2;font-size:10px;color:var(--muted);white-space:nowrap}
+#legend-toggle{display:none}
+.ptabs{display:none}
+
+@media(max-width:1600px){.hint-long{display:none}.hint-short{display:inline}}
+@media(max-width:1280px){
+  .tb .k,.viewbar .k,#time-info,#scene-hint{display:none}
+  .framesel .lng,.legend .l{display:none}.framesel .sht,.legend .s{display:inline}
+  .tl .end .hm{display:none}
+  .legend .row{column-gap:8px}.legend .lg-line,.legend .lg-trk{width:14px}
+  #views{display:none}#view-select{display:block}       /* the view title keeps its focus name (the 6 presets need ~330 px) */
+}
+@media(max-width:1180px){:root{--left-w:280px;--right-w:280px}.brand-sub{display:none}.tg .ph{gap:4px}.tg .ph h2{letter-spacing:.06em}.tg .ph .aside{letter-spacing:-.02em}}
+
+/* mid: Targets is a drawer over the stage (the canvas never resizes), Inspector docked */
+@media(max-width:1100px){
+  :root{--right-w:272px}
+  .tb,body.no-left .tb,body.no-right .tb{display:flex;align-items:center;gap:16px;padding:0 12px}
+  .tb>div{padding:0;border:0}
+  .tb-mid{flex:1;justify-content:flex-start;gap:16px}
+  .tb-right{margin-left:auto}
+  .panel-toggle{width:24px;padding:0}.panel-toggle .lbl{display:none}
+  .workspace,body.no-left .workspace{grid-template-columns:minmax(0,1fr) var(--right-w)}
+  body.no-right .workspace{grid-template-columns:minmax(0,1fr)}
+  #controls-panel{position:absolute;left:0;top:0;bottom:0;width:304px;z-index:20;display:none;box-shadow:0 12px 32px color-mix(in srgb,var(--surface) 85%,transparent)}
+  #controls-panel.open{display:flex}
+  #view-description{display:none}
+  #views{display:none}#view-select{display:block}
+}
+@media(max-width:900px){
+  .tb h1{display:none}
+  .vtitle .lng{display:none}.vtitle .sht{display:inline}
+  #play{min-width:32px}#play .lbl{display:none}
+  .transport{gap:8px;flex-wrap:wrap}
+  .steps button{min-width:0;padding:0 6px}
+}
+
+/* phone: sheets over the workspace, opened from the tab bar; the dock is one grid */
+@media(max-width:700px){
+  :root{--tb-h:48px;--row:28px;--ctl:32px}
+  body{grid-template-rows:var(--tb-h) minmax(0,1fr) 48px}
+  .tb{gap:8px}
+  .brand-sub,.panel-toggle,.clock .k,.clock .z{display:none}
+  .tb-mid{justify-content:space-between;gap:8px;min-width:0}
+  .clock{flex-wrap:wrap;gap:0 6px}
+  #utc-clock{flex-basis:100%;gap:4px}
+  #utc-date,#utc-time{font-size:13px;line-height:18px}
+  .clock .pill{height:16px;font-size:10px;padding:0 4px;gap:4px}
+  .framesel .rot{display:none}
+  .framesel .seg button{padding:0 8px}
+  #help-toggle{width:32px;height:32px}
+  .workspace,body.no-right .workspace{grid-template-columns:minmax(0,1fr)}
+  #controls-panel,#state-panel{position:absolute;inset:0;z-index:30;display:none;width:auto;border:0;border-top:1px solid var(--accent);box-shadow:none}
+  #state-panel{top:45%}#state-panel.full{top:0}
+  #controls-panel.open,#state-panel.open{display:flex}
+  .sheet-grab{display:flex;flex:none;align-items:center;justify-content:space-between;height:28px;padding:0 4px 0 12px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .sheet-grab button{height:24px;min-width:28px;font-size:14px}
+  .stage-head{height:36px;padding:0 12px;gap:8px}
+  .layers .pop{right:12px;top:40px;width:calc(100vw - 24px)}
+  .help-box{width:100%}.keys{grid-template-columns:auto minmax(0,1fr)}
+  .mouse-hint{display:none}.touch-hint{display:block}
+  .foot-right{right:12px;bottom:12px}
+  .dock{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto auto;grid-template-areas:"peek peek peek peek peek peek" "rev play speed mh now ph" "md track track track track pd" "leg leg leg cred cred cred";gap:4px 6px;padding:6px 12px 4px}
+  .transport,.tgroup,.tl,.legend-strip,.strip-right{display:contents}
+  .dock button,.dock select{min-width:0;padding:0 8px}
+  #peek{grid-area:peek}#reverse{grid-area:rev}#play{grid-area:play}#speed{grid-area:speed;width:auto}#minus-hour{grid-area:mh}#now{grid-area:now}#plus-hour{grid-area:ph}
+  #minus-day{grid-area:md;align-self:start}.track{grid-area:track}#plus-day{grid-area:pd;align-self:start}
+  #legend-toggle{display:block;grid-area:leg;justify-self:start;height:20px;font-size:10px}
+  #credit{grid-area:cred;justify-self:end;align-self:center}
+  .tl .end,#time-info,#scene-hint{display:none}
+  .peek:not([hidden]){display:grid;grid-template-columns:10px minmax(0,1fr) auto 28px 28px;align-items:center;gap:8px;height:28px;margin:-2px 0 2px;padding:0 0 0 2px;border-bottom:1px solid var(--line)}
+  .peek .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .peek .rg{color:var(--dim)}
+  .peek button{height:24px;font-size:13px;padding:0}
+  .legend{display:none}
+  .legend.open{display:grid;position:absolute;left:12px;right:12px;bottom:calc(100% + 8px);z-index:3;gap:4px;padding:8px 10px;background:var(--panel);border:1px solid var(--line);border-radius:4px}
+  .legend .l{display:inline}.legend .s{display:none}
+  .ptabs{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);background:var(--bg)}
+  .ptabs button{height:48px;border:0;border-radius:0;background:none;font-size:10px;line-height:12px;color:var(--dim);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  .ptabs b{font-size:14px;line-height:16px;font-weight:400}
+  .ptabs [aria-expanded=true]{color:var(--ink);box-shadow:inset 0 2px 0 var(--accent)}
+  #ptab-inspector.has-sel{color:var(--accent-soft)}
+  #ptab-inspector.has-sel b::after{content:"";display:inline-block;width:6px;height:6px;margin-left:4px;border-radius:50%;background:var(--c);vertical-align:2px}
+  /* touch targets ≥ 28 px: taller controls where the bar has room, else a transparent ::after hit box round the glyph */
+  .framesel .seg button,#view-select,.layers>summary,.chips .chip,.peek button,.sheet-grab button,.tab-nav button,.help-close{height:28px}
+  .chips .chip{border-radius:14px}.tab-nav button,.help-close{min-width:28px}
+  .field.search{height:var(--ctl)}.field.search input{height:100%}
+  .clock .pill,#legend-toggle{position:relative}
+  .clock .pill::after{content:"";position:absolute;inset:-11px -3px -3px}   /* insets from the padding box, inside the 1 px border */
+  #legend-toggle::after{content:"";position:absolute;inset:-6px -2px}
+  .edge-marker::after{content:"";position:absolute;inset:-9px -4px}
+  #timeline{top:1px;height:30px}
+  #timeline::-webkit-slider-runnable-track{height:30px}
+  #timeline::-webkit-slider-thumb{margin-top:6px}
+  #timeline::-moz-range-track{height:30px}
+}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
-<header class="topbar">
-  <button class="panel-toggle" id="toggle-controls" aria-controls="controls-panel" aria-pressed="true" title="Show or hide the left panel">◧<span class="toggle-label"> Panel</span></button>
-  <div class="identity"><span class="monogram">◐</span><div><h1>Cislunar Eye</h1><div class="eyebrow">Earth–Moon system · Sun–Earth L1 / L2</div></div></div>
-  <span class="top-clock" id="top-clock">—</span><span class="live-badge" id="live-badge" title="Following the wall clock">LIVE</span>
-  <div class="top-actions"><button class="panel-toggle" id="toggle-info" aria-controls="state-panel" aria-pressed="true" title="Show or hide the right panel"><span class="toggle-label">Panel </span>◨</button></div>
-</header>
-<main class="workspace">
-  <section class="time-panel" aria-label="Time controls">
-    <div class="time-head"><h2>Time · UTC</h2><span class="mini-clock" id="utc-mini">—</span></div>
-    <div class="transport"><button id="live" aria-pressed="false" title="Follow the wall clock (L)">● LIVE</button><button id="play" class="primary" aria-label="Play">▶ Play</button><button id="reverse" aria-pressed="false" title="Reverse playback">◀◀</button><label class="sr-only" for="speed" hidden>Playback speed</label><select id="speed" title="Playback rate">{{SPEEDS}}</select></div>
-    <div class="slider-row"><input id="timeline" type="range" min="0" max="{{WINDOW_S}}" step="60" value="0" list="ticks" aria-label="Epoch in the data window"><datalist id="ticks"></datalist></div>
-    <div class="timeline-ends"><span id="window-start">{{WINDOW_START}}</span><span id="window-stop">{{WINDOW_STOP}}</span></div>
-    <div class="step-row"><button id="minus-day" title="Back one day (Shift+←)">−1 d</button><button id="minus-hour" title="Back one hour (←)">−1 h</button><button id="now" title="LIVE wall clock; the build epoch when the clock is outside the window">Now</button><button id="plus-hour" title="Forward one hour (→)">+1 h</button><button id="plus-day" title="Forward one day (Shift+→)">+1 d</button></div>
-  </section>
-  <aside class="side left" id="controls-panel" aria-label="View controls and targets">
-    <button class="panel-close" id="close-controls" aria-label="Close panel">×</button>
-    <section class="section"><h2>Frame</h2><div class="seg" id="frames"><button data-frame="se" title="Sun–Earth rotating, Earth-centred (default)">SE rotating</button><button data-frame="eci" title="Earth-centred inertial, ICRF">ECI</button><button data-frame="em" title="Earth–Moon rotating, Earth-centred">EM rotating</button></div><p class="fine" id="frame-note"></p>
-      <div class="view-grid" id="views"><button data-view="em" title="Frame the Moon's orbit (the opening view)">Earth–Moon</button><button data-view="earth" title="Focus Earth (E)">Earth</button><button data-view="moon" title="Focus the Moon (M)">Moon</button><button data-view="wide" title="Frame SE-L1 to SE-L2">L1–L2</button><button data-view="l1" title="Focus SE-L1">SE-L1</button><button data-view="l2" title="Focus SE-L2">SE-L2</button></div></section>
-    <details class="section" id="layers-panel"><summary>Layers</summary>
-      <div class="layer-grid">
-        <label class="check"><input type="checkbox" data-layer="trails"> Trails</label><label class="check"><input type="checkbox" data-layer="labels"> Labels</label>
-        <label class="check"><input type="checkbox" data-layer="lagrange"> Lagrange points</label><label class="check"><input type="checkbox" data-layer="tracklets"> NEOCP tracklets</label>
-        <label class="check"><input type="checkbox" data-layer="sightlines"> Sight lines</label><label class="check"><input type="checkbox" data-layer="moonTrail"> Moon trail</label>
-        <label class="check"><input type="checkbox" data-layer="stars"> Stars</label><label class="check"><input type="checkbox" data-layer="starNames"> Star names</label>
-        <label class="check"><input type="checkbox" data-layer="grid"> RA / Dec grid</label><label class="check"><input type="checkbox" data-layer="constellations"> Constellations</label>
-        <label class="check"><input type="checkbox" data-layer="twilight"> Sun −12° ring</label><label class="check"><input type="checkbox" data-layer="rings"> Scale rings (GEO · Moon distance)</label>
-      </div>
-      <div class="inline"><label for="trail-length">Trail</label><select id="trail-length"><option value="auto">by regime</option><option value="1d">1 d</option><option value="3d">3 d</option><option value="15d">15 d</option><option value="full">full window</option></select>
-        <label for="star-gain">Stars</label><input id="star-gain" type="range" min="0" max="1.5" step="0.05" value="1" title="Star brightness"></div>
-    </details>
-    <section class="section"><h2>Targets <span id="target-count" class="fine"></span></h2>
-      <input id="search" type="search" placeholder="Search name, NORAD, COSPAR, Horizons ID (/)" autocomplete="off">
-      <div class="chips" id="chips"><button data-chip="t1" title="Tier 1: ephemeris covers now">Tier 1</button><button data-chip="t2" title="Tier 2: stale, ended or replayed objects">Tier 2</button><button data-chip="nat" title="Natural minimoons and quasi-satellites">Natural</button><button data-chip="t3" title="Tier 3: catalogued, list only">Tier 3</button></div>
-      <div id="target-list" class="target-list" role="list"></div>
-    </section>
-  </aside>
-  <section id="scene" aria-label="Cislunar scene">
-    <div class="scene-title"><strong id="view-title">Sun–Earth rotating</strong><span class="clock" id="scene-clock">—</span><p id="view-description"></p></div>
-    <div class="scene-foot"><div class="foot-left"><button id="legend-toggle" class="legend-chip" aria-pressed="false" aria-controls="legend">Legend</button><div class="legend" id="legend" aria-label="Legend"></div><button id="help-toggle" class="help-chip" aria-pressed="false" aria-controls="help" title="Keys and glyphs (?)">?</button></div>
-      <div class="foot-right" id="foot-right"><span id="scene-hint"><span class="hint-long">Drag to orbit · scroll to zoom · double-click to fly there · ? keys</span><span class="hint-short">drag · scroll · dbl-click · ? keys</span></span></div></div>
-    <div id="help" class="help" hidden role="dialog" aria-label="Keys and glyphs">
-      <div class="help-box"><button class="help-close" id="help-close" aria-label="Close">×</button>
-        <section><h2>Keys</h2><dl class="keys">
-          <dt><kbd>Space</kbd></dt><dd>play / pause</dd>
-          <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>−1 h / +1 h</dd>
-          <dt><kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd></dt><dd>−1 d / +1 d</dd>
-          <dt><kbd>L</kbd></dt><dd>LIVE (wall clock)</dd>
-          <dt><kbd>F</kbd></dt><dd>focus the selected target</dd>
-          <dt><kbd>Enter</kbd></dt><dd>focus the selected target</dd>
-          <dt><kbd>E</kbd></dt><dd>focus Earth</dd>
-          <dt><kbd>M</kbd></dt><dd>focus the Moon</dd>
-          <dt><kbd>/</kbd></dt><dd>search the list</dd>
-          <dt><kbd>Esc</kbd></dt><dd>deselect · close</dd>
-          <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>previous / next visible target</dd>
-          <dt><kbd>?</kbd></dt><dd>this help</dd>
-        </dl><p class="fine mouse-hint">Mouse: drag to orbit, scroll to zoom, click to select, double-click to fly there; hovering a marker or a trail raises that orbit.</p>
-        <p class="fine touch-hint">Touch: drag to orbit, pinch to zoom, tap to select, double-tap to fly there.</p></section>
-        <section><h2>Glyphs</h2><ul class="glyphs">
-          <li id="help-colours">colour = regime family</li>
-          <li><span class="nw"><b>●</b>payload</span> · <span class="nw"><b>■</b>rocket body</span> · <span class="nw"><b>◆</b>debris</span> · <span class="nw"><b>▲</b>natural</span></li>
-          <li><b>○</b>hollow: extrapolated or stale (no current ephemeris)</li>
-          <li><b>●<i class="dimb">●</i></b>dimmed: derelict; GP (Space-Track) markers slightly dimmer</li>
-          <li><i class="lg-lp" aria-hidden="true"></i>Lagrange point: SE-L1/L2; EM-L1…L5 in the EM frame or with the Moon focused</li>
-          <li><span class="nw"><i class="lg-line"></i>past, fading</span> · <span class="nw"><i class="lg-line dash"></i>future</span> · <span class="nw"><i class="lg-line dot"></i>extrapolated</span> · <span class="nw"><i class="lg-line dim"></i>GP</span></li>
-          <li><span class="nw"><i class="lg-line sun"></i>Sun 0° terminator</span> · <span class="nw"><i class="lg-line cyan"></i>Sun −12° ring</span> · <span class="nw"><i class="lg-ring" aria-hidden="true"></i>GEO · Moon distance</span></li>
-          <li><span class="nw"><i class="lg-trk" aria-hidden="true"></i>NEOCP tracklet: beads on a hairline</span> · <span class="nw"><i class="lg-line sight"></i>sight line</span></li>
-          <li><b>▸</b>edge chevron: off-screen Earth, Moon, SE-L1/L2, selected or natural object, with its range; click to fly there</li>
-        </ul></section>
+<header class="tb">
+  <div class="tb-brand"><span class="mark" aria-hidden="true">◐</span><h1>Cislunar Eye</h1><span class="brand-sub">Earth–Moon · SE-L1/L2</span></div>
+  <div class="tb-mid">
+    <div class="clock">
+      <span class="k">Epoch</span>
+      <time id="utc-clock" role="timer" aria-live="off" aria-label="Epoch, UTC"><span id="utc-date">—</span><span id="utc-time">—</span><span class="z">UTC</span></time>
+      <button id="live" class="pill" aria-pressed="false" title="Follow the wall clock (L)"><i aria-hidden="true"></i><span id="live-badge">PAUSED</span></button>
+      <span id="elapsed" title="Epoch minus the wall clock"></span>
+    </div>
+    <div class="framesel"><span class="k">Frame</span>
+      <div class="seg" id="frames" role="group" aria-label="Display frame (keys 1, 2, 3)">
+        <button data-frame="se" aria-pressed="true" title="Sun–Earth rotating (1): Earth-centred, Sun fixed on −x, ẑ ecliptic normal"><span class="lng">SE rotating</span><span class="sht">SE<span class="rot"> rot</span></span></button><button data-frame="eci" aria-pressed="false" title="Earth-centred inertial (2): ICRF axes"><span class="lng">ECI</span><span class="sht">ECI</span></button><button data-frame="em" aria-pressed="false" title="Earth–Moon rotating (3): Earth-centred, Moon fixed on +x, ẑ lunar orbit normal"><span class="lng">EM rotating</span><span class="sht">EM<span class="rot"> rot</span></span></button>
       </div>
     </div>
-    <div class="scene-credit">Illustration: Mickey · base map NASA Blue Marble</div>
-    <div id="sun-indicator" class="sun-indicator" hidden><i></i><span>Sun</span></div>
-    <div id="tooltip" class="tooltip" hidden></div>
-    <div id="banner" class="banner" hidden></div>
-    <div id="loading">Loading ephemerides…</div>
-    <div id="render-error" hidden><h2>3D rendering is unavailable</h2><p class="fine" id="render-error-detail"></p></div>
+  </div>
+  <div class="tb-right">
+    <button id="help-toggle" aria-pressed="false" aria-controls="help" aria-label="Keys and glyphs" title="Keys and glyphs (?)">?</button>
+    <button id="toggle-controls" class="panel-toggle" aria-controls="controls-panel" aria-pressed="true" aria-label="Targets panel" title="Show or hide the Targets panel">◧<span class="lbl"> Targets</span></button>
+    <button id="toggle-info" class="panel-toggle" aria-controls="state-panel" aria-pressed="true" aria-label="Inspector panel" title="Show or hide the Inspector"><span class="lbl">Inspector </span>◨</button>
+  </div>
+</header>
+<main class="workspace">
+  <aside id="controls-panel" class="panel" aria-label="Targets and NEOCP lookup">
+    <div class="sheet-grab"><span>Targets · NEOCP lookup</span><button id="close-controls" class="ghost" aria-label="Close the Targets sheet">×</button></div>
+    <section id="neocp-dock" class="neo" aria-label="NEOCP lookup"></section>
+    <section class="tg" aria-labelledby="targets-h">
+      <div class="ph"><h2 id="targets-h">Targets</h2><span id="target-count" class="aside"></span></div>
+      <label class="field search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="name · NORAD · COSPAR · Horizons id" autocomplete="off" spellcheck="false" aria-label="Search targets (/)"><kbd aria-hidden="true">/</kbd></label>
+      <div class="chips" id="chips" role="group" aria-label="Tiers">
+        <button class="chip" data-chip="t1" aria-pressed="true" title="Tier 1: ephemeris covers now">Tier 1<span></span></button><button class="chip" data-chip="t2" aria-pressed="false" title="Tier 2: stale, ended or replayed objects">Tier 2<span></span></button><button class="chip" data-chip="t3" aria-pressed="false" title="Tier 3: catalogued, list only">Tier 3<span></span></button>
+      </div>
+      <div class="cols" aria-hidden="true"><span></span><span></span><span>Target</span><span>Src</span><span class="r">Range</span><span></span></div>
+      <div id="target-list" class="list" aria-label="Targets by group"></div>
+    </section>
+  </aside>
+  <section class="stage">
+    <div class="stage-head">
+      <div class="vtitle"><span id="view-title">Sun–Earth rotating</span><p id="view-description"></p></div>
+      <div class="viewbar"><span class="k">View</span>
+        <div class="seg" id="views" role="group" aria-label="View presets"><button data-view="em" aria-pressed="false" title="Frame the Moon's orbit (the opening view)">Earth–Moon</button><button data-view="earth" aria-pressed="false" title="Focus Earth (E)">Earth</button><button data-view="moon" aria-pressed="false" title="Focus the Moon (M)">Moon</button><button data-view="wide" aria-pressed="false" title="Frame SE-L1 to SE-L2">L1–L2</button><button data-view="l1" aria-pressed="false" title="Focus SE-L1">SE-L1</button><button data-view="l2" aria-pressed="false" title="Focus SE-L2">SE-L2</button></div>
+        <select id="view-select" aria-label="View preset"><option value="" hidden>custom view</option><option value="em">Earth–Moon</option><option value="earth">Earth</option><option value="moon">Moon</option><option value="wide">L1–L2</option><option value="l1">SE-L1</option><option value="l2">SE-L2</option></select>
+        <details id="layers-panel" class="layers"><summary aria-label="Layers">Layers <span id="layer-count"></span> ▾</summary>
+          <div class="pop" role="group" aria-labelledby="layers-h">
+            <div class="ph"><h2 id="layers-h">Layers · <span id="layer-on"></span></h2><button class="ghost" id="layers-close" aria-label="Close layers">×</button></div>
+            <p class="lgh">Scene</p>
+            <div class="lgrid">
+              <label class="chk"><input type="checkbox" data-layer="trails"> Trails</label><label class="chk"><input type="checkbox" data-layer="labels"> Labels</label>
+              <label class="chk"><input type="checkbox" data-layer="lagrange"> Lagrange points</label><label class="chk"><input type="checkbox" data-layer="moonTrail"> Moon trail</label>
+              <label class="chk wide"><input type="checkbox" data-layer="rings"> Scale rings · GEO, Moon distance</label>
+            </div>
+            <p class="lgh">Observations</p>
+            <div class="lgrid"><label class="chk"><input type="checkbox" data-layer="tracklets"> Tracklets</label><label class="chk"><input type="checkbox" data-layer="sightlines"> Sight lines</label></div>
+            <p class="lgh">Sky</p>
+            <div class="lgrid">
+              <label class="chk"><input type="checkbox" data-layer="stars"> Stars</label><label class="chk"><input type="checkbox" data-layer="starNames"> Star names</label>
+              <label class="chk"><input type="checkbox" data-layer="grid"> RA / Dec grid</label><label class="chk"><input type="checkbox" data-layer="constellations"> Constellations</label>
+            </div>
+            <div class="lsel"><label for="trail-length">Trail length</label><select id="trail-length"><option value="auto">by regime</option><option value="1d">1 d</option><option value="3d">3 d</option><option value="15d">15 d</option><option value="full">full window</option></select></div>
+            <div class="lsel"><label for="star-gain">Star brightness</label><input id="star-gain" type="range" min="0" max="1.5" step="0.05" value="1"><output id="star-gain-out" for="star-gain">1.00</output></div>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div id="banner" class="banner" role="status" hidden></div>
+    <section id="scene" aria-label="Cislunar scene">
+      <div class="foot-right" id="foot-right"></div>
+      <div id="sun-indicator" class="sun-indicator" hidden><i></i><span>Sun</span></div>
+      <div id="tooltip" class="tooltip" hidden></div>
+      <div id="help" class="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-keys-h">
+        <div class="help-box"><button class="ghost help-close" id="help-close" aria-label="Close help">×</button>
+          <h2 id="help-keys-h">Keys</h2>
+          <dl class="keys">
+            <dt><kbd>Space</kbd></dt><dd>play / pause</dd><dt><kbd>L</kbd></dt><dd>LIVE (wall clock)</dd>
+            <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>−1 h / +1 h</dd><dt><kbd>⇧←</kbd> <kbd>⇧→</kbd></dt><dd>−1 d / +1 d</dd>
+            <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>SE · ECI · EM frame</dd><dt><kbd>F</kbd> <kbd>Enter</kbd></dt><dd>fly to selected</dd>
+            <dt><kbd>E</kbd> <kbd>M</kbd></dt><dd>focus Earth / Moon</dd><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>prev / next target</dd>
+            <dt><kbd>/</kbd></dt><dd>search targets</dd><dt><kbd>N</kbd></dt><dd>NEOCP lookup</dd>
+            <dt><kbd>Esc</kbd></dt><dd>deselect · close</dd><dt><kbd>?</kbd></dt><dd>this help</dd>
+          </dl>
+          <p class="fine mouse-hint">Mouse: drag to orbit, scroll to zoom, click to select, double-click to fly there; hovering a marker or a trail raises that orbit.</p>
+          <p class="fine touch-hint">Touch: drag to orbit, pinch to zoom, tap to select, double-tap to fly there.</p>
+          <h2>Glyphs</h2>
+          <ul class="glyphs">
+            <li id="help-colours">colour = regime family</li>
+            <li><span class="nw"><b>●</b>payload</span> · <span class="nw"><b>■</b>rocket body</span> · <span class="nw"><b>◆</b>debris</span> · <span class="nw"><b>○</b>hollow: extrapolated or stale</span> · <span class="nw"><b>●<i class="dimb">●</i></b>dimmed: derelict; GP slightly dimmer</span> · <span class="nw"><i class="lg-lp" aria-hidden="true"></i> Lagrange point</span></li>
+            <li><span class="nw"><i class="lg-line"></i> past, fading</span> · <span class="nw"><i class="lg-line dash"></i> future</span> · <span class="nw"><i class="lg-line dot"></i> extrapolated</span> · <span class="nw"><i class="lg-line dim"></i> GP</span></li>
+            <li><span class="nw"><i class="lg-line sun"></i> Sun 0° terminator</span> · <span class="nw"><i class="lg-ring" aria-hidden="true"></i> GEO · Moon distance</span></li>
+            <li><span class="nw"><i class="lg-trk" aria-hidden="true"></i> tracklet: beads on a hairline</span> · <span class="nw"><i class="lg-line sight"></i> sight line</span></li>
+            <li><b>▸</b>edge chevron: off-screen Earth, Moon, SE-L1/L2 or selected object, with its range; click to fly there</li>
+          </ul>
+        </div>
+      </div>
+      <div id="loading">Loading ephemerides…</div>
+      <div id="render-error" hidden><h2>3D rendering is unavailable</h2><p class="fine" id="render-error-detail"></p></div>
+    </section>
+    <section id="time-dock" class="dock" aria-label="Time">
+      <div id="peek" class="peek" hidden><i class="g"></i><b class="nm"></b><span class="rg"></span><button class="ghost" data-peek="info" aria-label="Open the Inspector">ⓘ</button><button class="ghost" data-peek="close" aria-label="Deselect">×</button></div>
+      <div class="transport">
+        <div class="tgroup">
+          <button id="reverse" aria-pressed="false" aria-label="Reverse playback" title="Reverse playback">◀◀</button>
+          <button id="play" class="primary" aria-label="Play" title="Play / pause (Space)"><span aria-hidden="true">▶</span><span class="lbl"> Play</span></button>
+          <select id="speed" aria-label="Playback rate" title="Playback rate">{{SPEEDS}}<option value="live" hidden>real time</option></select>
+        </div>
+        <div class="tgroup steps">
+          <button id="minus-day" title="Back one day (Shift+←)">−1 d</button><button id="minus-hour" title="Back one hour (←)">−1 h</button>
+          <button id="now" aria-pressed="false" title="LIVE wall clock; the build epoch when the wall clock is outside the window">● Now</button>
+          <button id="plus-hour" title="Forward one hour (→)">+1 h</button><button id="plus-day" title="Forward one day (Shift+→)">+1 d</button>
+        </div>
+        <div id="time-info"></div>
+      </div>
+      <div class="tl">
+        <span class="end" id="window-start"></span>
+        <div class="track" id="track"><div class="rail"><i></i></div><div id="timeline-marks" aria-hidden="true"></div><input id="timeline" type="range" min="0" max="{{WINDOW_S}}" step="60" value="0" list="ticks" aria-label="Epoch in the data window"><datalist id="ticks"></datalist></div>
+        <span class="end" id="window-stop"></span>
+      </div>
+      <div class="legend-strip">
+        <div class="legend" id="legend" role="group" aria-label="Legend"></div>
+        <button id="legend-toggle" class="chip" aria-expanded="false" aria-controls="legend">Legend ▴</button>
+        <div class="strip-right">
+          <span id="scene-hint"><span class="hint-long">drag orbit · scroll zoom · click select · dbl-click fly</span><span class="hint-short">drag · scroll · dbl-click</span></span>
+          <span id="credit" class="scene-credit">Illustration: Mickey</span>
+        </div>
+      </div>
+    </section>
   </section>
-  <aside class="side right" id="state-panel" aria-label="Selected epoch and target">
-    <button class="panel-close" id="close-info" aria-label="Close panel">×</button>
-    <section class="metric epoch"><h2>Epoch · UTC</h2><time class="utc-big" id="utc-clock"><span class="d" id="utc-date">—</span> <span class="t" id="utc-time">—</span></time><div class="elapsed" id="elapsed">—</div></section>
-    <div id="readout"></div>
-    <details class="metric about" id="about-panel"><summary>About</summary>{{ABOUT}}</details>
+  <aside id="state-panel" class="panel" aria-label="Inspector">
+    <div class="sheet-grab"><span>Inspector</span><span><button id="expand-info" class="ghost" aria-pressed="false" aria-label="Full-height Inspector">⤢</button><button id="close-info" class="ghost" aria-label="Close the Inspector">×</button></span></div>
+    <div class="tabs">
+      <div role="tablist" aria-label="Inspector">
+        <button id="itab-target" class="tab" role="tab" aria-selected="false" aria-controls="readout" tabindex="-1" disabled>Target<span class="b">none</span></button>
+        <button id="itab-situation" class="tab" role="tab" aria-selected="true" aria-controls="situation">Situation</button>
+        <button id="itab-about" class="tab" role="tab" aria-selected="false" aria-controls="about-panel" tabindex="-1">About</button>
+      </div>
+      <span class="tab-nav" id="tab-nav" hidden><button class="ghost" data-act="prev" aria-label="Previous visible target ([)" title="Previous visible target ([)">‹</button><button class="ghost" data-act="next" aria-label="Next visible target (])" title="Next visible target (])">›</button></span>
+    </div>
+    <div id="readout" class="ibody" role="tabpanel" aria-labelledby="itab-target" hidden></div>
+    <div id="situation" class="ibody" role="tabpanel" aria-labelledby="itab-situation"></div>
+    <div id="about-panel" class="ibody about" role="tabpanel" aria-labelledby="itab-about" hidden>{{ABOUT}}</div>
   </aside>
 </main>
+<nav id="ptabs" class="ptabs" aria-label="Panels">
+  <button id="ptab-targets" aria-controls="controls-panel" aria-expanded="false"><b aria-hidden="true">☰</b><span>Targets · <span id="ptab-count">—</span></span></button>
+  <button id="ptab-neocp" aria-controls="controls-panel" aria-expanded="false"><b aria-hidden="true">⊕</b>NEOCP lookup</button>
+  <button id="ptab-inspector" aria-controls="state-panel" aria-expanded="false"><b aria-hidden="true">ⓘ</b>Inspector</button>
+</nav>
 <script>window.CLE={q:[],register:function(n,p){this.q.push([n,p])}};window.CLE_DATA_BASE={{DATA_BASE_JSON}};</script>
 <script src="{{DATA_BASE}}/manifest.js"></script>
 <script src="{{DATA_BASE}}/core.js"></script>

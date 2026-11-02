@@ -1,4 +1,6 @@
-"""Targets of the viewer: tier 1-2 rows of catalog/master_list.json (ARCHITECTURE.md §4.4, AM3, AM8).
+"""Targets of the viewer: tier 1-2 rows of catalog/master_list.json (ARCHITECTURE.md §4.4, AM3, AM8), minus the
+groups the viewer leaves out (VIEWER_EXCLUDED_GROUPS: NEOCP live and archive, natural minimoons; the master list and
+its classification keep them).
 
 `targets()` returns the master-list rows (the dicts adapters receive) with a few derived keys added:
 label (<= 14 chars), chunk (targets-<chunk>.js), centre (interpolation centre), default_visible, staleness.
@@ -33,11 +35,16 @@ REGIMES = [  # key, label, colour (§9.3), chunk
     ("SE_L1", "Sun–Earth L1", FAMILY["SE_L1"], "se"),
     ("SE_L2", "Sun–Earth L2", FAMILY["SE_L2"], "se"),
     ("EARTH_NEAR_HELIO", "Near-Earth heliocentric", FAMILY["HELIO"], "helio"),
-    ("NEOCP_GEO", "NEOCP geocentric", FAMILY["NEOCP"], "neocp"),
+    ("NEOCP_GEO", "NEOCP geocentric", FAMILY["NEOCP"], "cislunar"),   # on-request objects; their track is not in a chunk
     ("OTHER", "Other", FAMILY["OTHER"], "helio"),
 ]
 CHUNK = {k: c for k, _, _, c in REGIMES}
-CHUNKS = ("lunar", "em", "cislunar", "heo", "se", "helio", "neocp")
+CHUNKS = ("lunar", "em", "cislunar", "heo", "se", "helio")
+# Master-list groups the viewer pipeline (cle states / export / validate, scripts/sanity_check.py) never loads: the
+# scheduled NEOCP flow is retired (NEOCP objects are requested one at a time instead) and minimoons are not shown.
+# obj_type "natural" is dropped too, whatever its group.
+VIEWER_EXCLUDED_GROUPS = frozenset({"NEOCP live", "NEOCP archive (unidentified apparitions)",
+                                    "Natural companions (minimoons, quasi-satellites)"})
 DAY = 86400
 
 LABELS = {  # hand labels where the rules below give a poor short name
@@ -81,8 +88,8 @@ def label(row: dict) -> str:
 
 
 def trail(row: dict) -> dict:
-    """Default past/future trail spans in seconds (§9.4, HEO shortened); the window is ±15 d. Live NEOCP objects get
-    first obs -> now + 1 d from cle.adapters.neocp."""
+    """Default past/future trail spans in seconds (§9.4, HEO shortened); the window is ±15 d. Requested NEOCP
+    objects get first obs - 0.5 d -> now + 1 d instead."""
     regime, p = row["regime"], num(row.get("period_d"))
     if regime == "LUNAR_ORBIT":
         p = p or 2 / 24
@@ -146,11 +153,17 @@ def staleness(row: dict, now: date | None) -> dict:
     return {"flag": flag, "age_d": age if flag or kind == "spacetrack_gp" else None}
 
 
-def targets(path: Path = MASTER, tiers=(1, 2)) -> list[dict]:
+def viewer_excluded(row: dict) -> bool:
+    """True for a master-list row (or catalog.js entry) the viewer leaves out (VIEWER_EXCLUDED_GROUPS, natural)."""
+    return row.get("group") in VIEWER_EXCLUDED_GROUPS or row.get("obj_type") == "natural"
+
+
+def targets(path: Path = MASTER, tiers=(1, 2), viewer: bool = True) -> list[dict]:
+    """The viewer's rows; viewer=False keeps the excluded groups too (catalog tooling, tests)."""
     rows, master = [], load(path)
     now = date.fromisoformat(master["generated_for"]) if master.get("generated_for") else None
     for row in master["objects"]:
-        if row["tier"] not in tiers:
+        if row["tier"] not in tiers or (viewer and viewer_excluded(row)):
             continue
         rows.append(row | {"label": label(row), "chunk": CHUNK.get(row["regime"], "helio"),
                            "centre": "moon" if row["regime"] == "LUNAR_ORBIT" else "earth",
@@ -168,8 +181,7 @@ def entry(row: dict, regime_now: str = "", drawn: bool = False) -> dict:
         "aliases": [a for a in row.get("aliases", "").split(";") if a],
         "norad": int(norad) if norad else None, "cospar": row.get("cospar") or None,
         "horizons_id": row.get("horizons_id") or None, "group": row["group"],
-        "obj_type": row["obj_type"], "natural": row["obj_type"] == "natural",
-        "regime": row["regime"], "regime_now": regime_now,
+        "obj_type": row["obj_type"], "regime": row["regime"], "regime_now": regime_now,
         "status": row["status"], "status_date": row.get("status_date") or None,
         "tier": row["tier"], "tier_reason": row.get("tier_reason", ""), "draw": row["draw"] == "Y",
         "drawn": drawn, "default_visible": row["default_visible"] and drawn,

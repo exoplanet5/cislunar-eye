@@ -213,16 +213,23 @@ class CatalogTest(unittest.TestCase):
     def test_selection(self):
         objs = catalog.load()["objects"]
         rows = catalog.targets()
-        self.assertEqual(len(rows), sum(o["tier"] <= 2 for o in objs))
-        self.assertEqual(sum(r["default_visible"] for r in rows), sum(o["tier"] == 1 and o["draw"] == "Y" for o in objs))
+        shown = [o for o in objs if o["tier"] <= 2 and not catalog.viewer_excluded(o)]
+        self.assertEqual(len(rows), len(shown))
+        self.assertEqual(sum(r["default_visible"] for r in rows), sum(o["tier"] == 1 and o["draw"] == "Y" for o in shown))
+        self.assertEqual(len(catalog.targets(viewer=False)), sum(o["tier"] <= 2 for o in objs))
         by = {r["cid"]: r for r in rows}
         for cid in ("ibex", "capstone"):
             self.assertEqual((by[cid]["tier"], by[cid]["draw"]), (1, "Y"))
             self.assertTrue(by[cid]["caveat"])
         for cid in ("queqiao-1", "queqiao-2", "tiandu-2"):
             self.assertEqual((by[cid]["tier"], by[cid]["draw"], by[cid]["default_visible"]), (1, "N", False))
-        naturals = [r for r in rows if r["obj_type"] == "natural"]
-        self.assertTrue(naturals and all(r["tier"] == 2 and not r["default_visible"] for r in naturals))
+        naturals = [o for o in objs if o["obj_type"] == "natural"]          # the master list keeps its classification
+        self.assertTrue(naturals and all(o["tier"] == 2 for o in naturals))
+        self.assertFalse([r["cid"] for r in rows if r["obj_type"] == "natural" or r["group"] in catalog.VIEWER_EXCLUDED_GROUPS])
+        self.assertTrue({o["cid"] for o in naturals} <= {r["cid"] for r in catalog.targets(viewer=False)})
+        self.assertNotIn("natural", catalog.entry(rows[0]))
+        self.assertIn("NEOCP_GEO", catalog.CHUNK)                             # the regime stays (on-request objects)
+        self.assertIn(catalog.CHUNK["NEOCP_GEO"], catalog.CHUNKS)
         for r in rows:
             self.assertLessEqual(len(r["label"]), 14, r["cid"])
             self.assertIn(r["chunk"], catalog.CHUNKS)

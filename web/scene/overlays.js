@@ -1,8 +1,9 @@
-// Lagrange markers (AM4, hollow diamonds with a centre dot) and NEOCP tracklets (§7: dots coloured by station, one
-// hairline per tracklet, optional sight lines from the station). Tracklet vertices are rotated with R(t_obs) per frame
-// switch and grouped per target in time order, so hidden targets hide their lines too and only the tracklets inside the
-// target's drawn trail window are drawn (one draw range; a tracklet spans minutes); the focused target's group is
-// re-emitted relative to an anchor at its position (§9.2), like its trail.
+// Lagrange markers (AM4, hollow diamonds with a centre dot) and astrometry tracklets of catalog targets and requested
+// NEOCP objects (§7: dots coloured by station, one hairline per tracklet, optional sight lines from the station).
+// Tracklet vertices are rotated with R(t_obs) per frame switch and grouped per target in time order, so hidden targets
+// hide their lines too and only the tracklets inside the target's drawn trail window are drawn (one draw range; a
+// tracklet spans minutes); the focused target's group is re-emitted relative to an anchor at its position (§9.2), like
+// its trail.
 import * as THREE from 'three';
 import { PointLayer, SHAPE } from './markers.js';
 import { decode } from '../loader.js';

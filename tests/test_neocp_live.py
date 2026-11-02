@@ -2,9 +2,10 @@
 
     ~/.venvs/astro313/bin/python -I -m unittest tests.test_neocp_live
 
-Each replay copies work/cache/neocp (pages, obs, history) into a scratch cache, installs one summary / neocp.txt /
-sat_id2 snapshot as the "current" download and runs the script as a subprocess with CLE_NOW set, exactly as the
-Makefile does; no network. Skipped when the 2026-10-21 snapshots or ../neocpsat are missing (work/ is not versioned).
+The script is the manual catalog-source refresh (`make neocp-live`; the hourly flow is retired). Each replay copies
+work/cache/neocp (pages, obs, history) into a scratch cache, installs one summary / neocp.txt / sat_id2 snapshot as the
+"current" download and runs the script as a subprocess with CLE_NOW set, exactly as the Makefile does; no network.
+Skipped when the 2026-10-21 snapshots or ../neocpsat are missing (work/ is not versioned).
 """
 import json
 import os
@@ -173,55 +174,6 @@ class RemovedTest(unittest.TestCase):
             parsed, _, tsv = Replay(tmp, {"stats": {}, "objects": {}}).run("2026-10-21T13:00:00Z")
             self.assertEqual(sorted(parsed["removed"]), ["P22rrti", "TKO0003"])
             self.assertEqual(tsv["TKO0003"]["listed_now"], "N")
-
-    def test_adapter_removed_list(self):
-        from cle.adapters import neocp
-        parsed = {"removed": {"P22rrti": {"last_listed": "2026-10-20T21:03:33Z", "removed_utc": "2026-10-21T07:02:26Z"},
-                              "TKO0003": {"last_listed": "2026-10-20T21:03:33Z", "removed_utc": "2026-10-21T07:02:26Z"}}}
-        out = neocp.removed_list(parsed, {"TKO0003": {}, "8NIQ001": {}})        # TKO0003 is still a live object
-        self.assertEqual(out, [{"desig": "P22rrti", "removed_utc": "2026-10-21T07:02:26Z",
-                                "last_listed": "2026-10-20T21:03:33Z", "reason": "no longer on the NEOCP"}])
-        self.assertEqual(neocp.removed_list({"stats": {}, "objects": {}}, {}), [])
-
-
-def node_hooks():
-    """node >= 23.5 with module.registerHooks (to map the page's bare 'three' import to web/vendor as build_site.mjs does)."""
-    node = shutil.which("node")
-    return node and subprocess.run([node, "-e", "process.exit(typeof require('node:module').registerHooks === 'function' ? 0 : 1)"],
-                                   capture_output=True).returncode == 0
-
-
-class ListBadgeTest(unittest.TestCase):
-    """web/ui/list.js renders "left NEOCP <date>" from a catalog entry's left_neocp (ISO date) and nothing without it."""
-
-    @unittest.skipUnless(node_hooks(), "node with module.registerHooks not available")
-    def test_badge(self):
-        hooks = """
-            import { registerHooks } from 'node:module';
-            import { pathToFileURL } from 'node:url';
-            registerHooks({ resolve(spec, ctx, next) {
-              if (spec === 'three') return { url: pathToFileURL('%s/web/vendor/three/three.module.min.js').href, shortCircuit: true };
-              return next(spec, ctx); } });
-        """ % ROOT
-        js = """
-            import { TargetList } from '%s/web/ui/list.js';
-            const T = (id, cat) => ({ id, cat, label: id, tier: 1, natural: false, group: 'NEOCP live', regime: { order: 1 },
-                                      visible: true, draw: true, css: '#fff', seg: null });
-            const targets = [T('a11idud', { name: 'Multijunk', left_neocp: '2026-10-20T21:03:33Z' }), T('x', { name: 'x' })];
-            const el = { addEventListener() {}, querySelectorAll() { return []; }, innerHTML: '' };
-            const w = { targets, byId: new Map(targets.map(t => [t.id, t])), groupOrder: new Map(), t: 0 };
-            new TargetList(el, w, { chipOn: () => true, selected: null, loaded: true }).render();
-            console.log(el.innerHTML);
-        """ % ROOT
-        with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "hooks.mjs").write_text(hooks)
-            r = subprocess.run(["node", "--import", str(Path(tmp) / "hooks.mjs"), "--input-type=module", "-e", js],
-                               capture_output=True, text=True, cwd=ROOT)
-        self.assertEqual(r.returncode, 0, r.stderr[-1000:])
-        html = r.stdout
-        self.assertIn('<span class="tier left" title="no longer in the NEOCP listings (last listed 2026-10-20)">left NEOCP 2026-10-20</span>', html)
-        self.assertEqual(html.count("left NEOCP"), 1)
-        self.assertIn("left the NEOCP 2026-10-20", html)                        # row tooltip
 
 
 if __name__ == "__main__":

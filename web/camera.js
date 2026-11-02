@@ -111,19 +111,21 @@ export class CameraTween {
   }
 }
 
-// Point on the scene edge in screen direction a (rad, y down), clear of the title above and the legend strip below (edge
-// chevrons and the Sun indicator).
+// Point on the scene edge in screen direction a (rad, y down) for the edge chevrons and the Sun indicator: their boxes
+// (the 12 px arrow 6 px before the point, the text beyond) stay ≥ 8 px inside every edge. The view title, legend and
+// credit sit outside the render; the scale bar is a keep-out box (placeEdgeBox).
 export function edgePoint(a, w, h) {
   const m = 28, cx = w / 2, cy = h / 2, sa = Math.sin(a);
-  const k = Math.min((cx - m) / Math.abs(Math.cos(a) || 1e-9), sa > 0 ? (h - 72 - cy) / sa : sa < 0 ? (cy - 64) / -sa : Infinity);
+  const k = Math.min((cx - m) / Math.abs(Math.cos(a) || 1e-9), sa > 0 ? (h - 24 - cy) / sa : sa < 0 ? (cy - 20) / -sa : Infinity);
   return { x: cx + Math.cos(a) * k - 6, y: cy + Math.sin(a) * k - 6, right: Math.cos(a) > .3 };
 }
 
 // Moves box b {x, y, width, height} (integer px) vertically to the nearest free 16-px slot: +1, −1, +2, −2 … steps from its
-// edge point, toward the scene centre first, inside [4, h − 20]; `taken` are boxes already placed and keep-outs. Returns b.
+// edge point, toward the scene centre first, inside [8, h − 8 − 16]; `taken` are boxes already placed and keep-outs.
+// Returns b.
 export function placeEdgeBox(b, taken, h) {
   const y0 = b.y, dir = y0 > h / 2 ? -16 : 16;
-  const hit = () => b.y < 4 || b.y > h - 20 || taken.some(o => b.x < o.x + o.width && b.x + b.width > o.x && b.y < o.y + o.height && b.y + b.height > o.y);
+  const hit = () => b.y < 8 || b.y > h - 24 || taken.some(o => b.x < o.x + o.width && b.x + b.width > o.x && b.y < o.y + o.height && b.y + b.height > o.y);
   for (let i = 1; i <= 60 && hit(); i++) b.y = y0 + dir * Math.ceil(i / 2) * (i % 2 ? 1 : -1);
   if (hit()) b.y = y0;
   return b;

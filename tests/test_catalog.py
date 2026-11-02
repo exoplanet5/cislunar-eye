@@ -101,7 +101,8 @@ class MergeTest(unittest.TestCase):
             self.assertIn("override for unknown cid no-such-cid ignored", md)
 
     def test_left_neocp_from_listed_now(self):
-        """DW-06: a neocp row with listed_now=N gives tier_reason 'left the NEOCP <date>' and left_neocp."""
+        """DW-06: a neocp row with listed_now=N gives tier_reason 'left the NEOCP <date>' and left_neocp in the master
+        list (classification unchanged); the viewer's catalog.targets() leaves the NEOCP live group out."""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d) / "sources"
             src.mkdir()
@@ -121,7 +122,8 @@ class MergeTest(unittest.TestCase):
             o = objs[0]
             self.assertEqual((o["group"], o["tier"], o["tier_reason"]), ("NEOCP live", 1, "left the NEOCP 2026-10-19"))
             self.assertEqual(o["_left_neocp"], "2026-10-19")
-            t = catalog.targets(Path(d) / "master_list.json")[0]
+            self.assertEqual(catalog.targets(Path(d) / "master_list.json"), [])
+            t = catalog.targets(Path(d) / "master_list.json", viewer=False)[0]
             e = catalog.entry(t)
             self.assertEqual((e["left_neocp"], e["subgroup"]), ("2026-10-19", "left"))
 

@@ -1,6 +1,7 @@
 // Field-level contract between dist/data/*.js and the page (REVIEW DW-12), checked without a browser: every field
 // that web/loader.js, web/model.js, web/app.js and web/ui/*.js read from the cle/*@1 sidecars. Skips when dist/data
-// is not built (make build); the viewer fixture has a looser catalog and is covered by tests/browser.mjs.
+// is not built (make build); the viewer fixture has a looser catalog and is covered by tests/browser.mjs. The last test
+// checks the fixture's canned answer of the on-request NEOCP helper (build/fixture/request/C46FX01.json, npm run fixture).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -61,8 +62,24 @@ function checkTrack(track, what) {
   return d;
 }
 
+// Astrometry tracklets as web/scene/overlays.js TrackletLayer and the readout read them (§7, cle.tracklets.build):
+// per station and night, light-time epochs t_ms, geocentric ICRF stn_km / dot_km as base64 f64 n×3.
+function checkTracklets(list, w) {
+  assert.ok(Array.isArray(list), `${w}.tracklets`);
+  for (const tk of list) {
+    isStr(tk.stn, `${w}: tracklet stn`); assert.ok(Number.isInteger(tk.n) && tk.n >= 1 && tk.t_ms.length === tk.n, `${w}: tracklet n/t_ms`);
+    tk.t_ms.forEach(t => isNum(t, `${w}: tracklet t_ms`));
+    for (const k of ['ra_deg', 'dec_deg', 'mag', 'range_km', 'resid_arcsec']) assert.equal(tk[k].length, tk.n, `${w}: tracklet ${k}`);
+    assert.equal(decode(tk.dot_km, 'f64').length, tk.n * 3, `${w}: dot_km`); assert.equal(decode(tk.stn_km, 'f64').length, tk.n * 3, `${w}: stn_km`);
+  }
+}
+
+// The master-list groups the viewer pipeline leaves out (src/cle/catalog.py VIEWER_EXCLUDED_GROUPS).
+const EXCLUDED = new Set(['NEOCP live', 'NEOCP archive (unidentified apparitions)', 'Natural companions (minimoons, quasi-satellites)']);
+
 test('manifest.js lists every sidecar with its size and sha256', { skip }, () => {
   const m = D.manifest;
+  for (const f of ['neocp.js', 'targets-neocp.js']) assert.ok(!files.includes(f) && !(f in m.files), `${f}: retired (NEOCP is on request)`);
   assert.equal(m.schema, 'cle/manifest@1'); isIso(m.built_utc, 'manifest.built_utc'); isIso(m.now_utc, 'manifest.now_utc');
   assert.deepEqual(Object.keys(m.files).sort(), files.filter(f => f !== 'manifest.js'));
   for (const [f, e] of Object.entries(m.files)) {
@@ -101,7 +118,7 @@ test('catalog.js: every target carries what the list, readout and model read', {
   const c = D.catalog;
   assert.equal(c.schema, 'cle/catalog@1'); isIso(c.built_utc, 'built_utc');
   const regimes = new Set(c.regimes.map(r => { isStr(r.key, 'regime.key'); isStr(r.label, 'regime.label'); assert.match(r.color, /^#[0-9a-f]{6}$/i); return r.key; }));
-  for (const g of c.groups) { isStr(g.key, 'group.key'); isNum(g.order, 'group.order'); }
+  for (const g of c.groups) { isStr(g.key, 'group.key'); isNum(g.order, 'group.order'); assert.ok(!EXCLUDED.has(g.key), `group ${g.key}: excluded from the viewer`); }
   assert.ok(Array.isArray(c.chunks) && c.chunks.length > 0);
   for (const ch of c.chunks) assert.ok(ch.startsWith('targets-') && D[ch], `chunk ${ch} has a file`);
   const ids = new Set();
@@ -110,7 +127,8 @@ test('catalog.js: every target carries what the list, readout and model read', {
     isStr(t.id, w); assert.ok(!ids.has(t.id), `${w}: duplicate id`); ids.add(t.id);
     isStr(t.name, `${w}.name`); isStr(t.label, `${w}.label`); isStr(t.group, `${w}.group`); isStr(t.obj_type, `${w}.obj_type`);
     assert.ok(regimes.has(t.regime), `${w}: regime ${t.regime}`);
-    isBool(t.natural, `${w}.natural`); isBool(t.draw, `${w}.draw`); isBool(t.drawn, `${w}.drawn`); isBool(t.default_visible, `${w}.default_visible`);
+    assert.ok(!EXCLUDED.has(t.group) && t.obj_type !== 'natural', `${w}: ${t.group} / ${t.obj_type} is excluded from the viewer`);
+    assert.equal(t.natural, undefined, `${w}: natural is gone`); isBool(t.draw, `${w}.draw`); isBool(t.drawn, `${w}.drawn`); isBool(t.default_visible, `${w}.default_visible`);
     assert.ok(Number.isInteger(t.tier) && t.tier >= 1, `${w}.tier`); isStr(t.caveat, `${w}.caveat`); isStr(t.status, `${w}.status`);
     isStr(t.primary_ephem, `${w}.primary_ephem`); isStr(t.notes, `${w}.notes`); assert.ok(Array.isArray(t.aliases), `${w}.aliases`);
     assert.ok(t.norad === null || Number.isInteger(t.norad), `${w}.norad`);
@@ -124,12 +142,8 @@ test('catalog.js: every target carries what the list, readout and model read', {
     assert.ok(t.elements.epoch === null || typeof t.elements.epoch === 'string', `${w}.elements.epoch`);
     assert.ok(t.trail === null || (typeof t.trail === 'object' && (t.trail.past_s == null || typeof t.trail.past_s === 'number')), `${w}.trail`);
     if (t.drawn) {
-      assert.ok(t.draw && (c.chunks.includes(t.chunk) || t.chunk === 'neocp'), `${w}: drawn needs draw=Y and a chunk`);
-      if (t.chunk === 'neocp') {            // live NEOCP object: its track travels only in neocp.js (EFF-6)
-        const live = Object.values(D.neocp.objects).find(o => o.cid === t.id);
-        assert.ok(live && live.track, `${w}: chunk "neocp" but no neocp.js object with a track`);
-        assert.ok(c.chunks.every(ch => !D[ch].targets[t.id]), `${w}: live NEOCP track duplicated in a chunk`);
-      } else assert.ok(D[t.chunk].targets[t.id], `${w}: no payload in ${t.chunk}.js`);
+      assert.ok(t.draw && c.chunks.includes(t.chunk), `${w}: drawn needs draw=Y and a chunk`);
+      assert.ok(D[t.chunk].targets[t.id], `${w}: no payload in ${t.chunk}.js`);
       assert.equal(t.not_drawn_reason, undefined, `${w}: drawn with a reason`);
       isIso(t.data.start_utc, `${w}.data.start_utc`); isIso(t.data.end_utc, `${w}.data.end_utc`);
       assert.ok(Array.isArray(t.data.quality) && Array.isArray(t.data.src) && typeof t.data.retrieved_utc === 'string', `${w}.data`);
@@ -138,9 +152,9 @@ test('catalog.js: every target carries what the list, readout and model read', {
       if (t.draw) assert.ok(typeof t.not_drawn_reason === 'string' && t.not_drawn_reason.length > 0, `${w}: draw=Y, not drawn, no reason`);
     }
   }
-  const drawn = c.targets.filter(t => t.drawn).length, live = c.targets.filter(t => t.drawn && t.chunk === 'neocp').length;
+  const drawn = c.targets.filter(t => t.drawn).length;
   const payloads = c.chunks.reduce((n, ch) => n + Object.keys(D[ch].targets).length, 0);
-  assert.equal(payloads + live, drawn, 'one payload per drawn target (chunk or neocp.js)');
+  assert.equal(payloads, drawn, 'one chunk payload per drawn target');
   assert.ok(drawn > 0, 'at least one drawn target');
 });
 
@@ -164,41 +178,13 @@ test('targets-*.js: one clipped, decodable track per drawn target', { skip }, ()
       assert.ok(t.validation && typeof t.validation === 'object', `${w}.validation`);
       for (const k of ['midpoint_max_km', 'tol_km', 'regime_pass', 'regime_check', 'midpoint_method', 'moon_check_km']) assert.ok(k in t.validation, `${w}.validation.${k}`);
       isStr(t.caveat, `${w}.caveat`); isStr(t.quality_note, `${w}.quality_note`);
+      if ('tracklets' in t) {           // NEOCP / neocpsat astrometry of an identified target (build/tracklets.json)
+        assert.ok(t.tracklets.length > 0, `${w}: an empty tracklets key is omitted`);
+        checkTracklets(t.tracklets, w);
+        for (const tk of t.tracklets) tk.t_ms.forEach(x => assert.ok(x >= win.t0 - 86400e3 && x <= win.t1, `${w}: tracklet epoch outside the window`));
+      }
     }
   }
-});
-
-test('neocp.js: live objects, attached tracklets and the removed list', { skip }, () => {
-  const n = D.neocp, ids = new Set(D.catalog.targets.map(t => t.id));
-  assert.equal(n.schema, 'cle/neocp@1'); isIso(n.built_utc, 'neocp.built_utc');
-  assert.ok(n.neocp_snapshot_utc === null || ISO.test(n.neocp_snapshot_utc), 'neocp_snapshot_utc');
-  assert.ok(n.objects && typeof n.objects === 'object' && Array.isArray(n.removed), 'objects / removed');
-  const checkTracklets = (list, w) => {
-    assert.ok(Array.isArray(list), `${w}.tracklets`);
-    for (const tk of list) {
-      isStr(tk.stn, `${w}: tracklet stn`); assert.ok(Number.isInteger(tk.n) && tk.n >= 1 && tk.t_ms.length === tk.n, `${w}: tracklet n/t_ms`);
-      tk.t_ms.forEach(t => isNum(t, `${w}: tracklet t_ms`));
-      assert.equal(decode(tk.dot_km, 'f64').length, tk.n * 3, `${w}: dot_km`); assert.equal(decode(tk.stn_km, 'f64').length, tk.n * 3, `${w}: stn_km`);
-    }
-  };
-  for (const [desig, o] of Object.entries(n.objects)) {
-    const w = `neocp ${desig}`, cat = o.catalog;
-    assert.ok(cat && typeof cat.id === 'string', `${w}: catalog.id`);
-    if (o.cid != null) assert.equal(o.cid, cat.id, `${w}: cid`);
-    for (const k of ['regime', 'group', 'obj_type', 'name', 'label']) isStr(cat[k], `${w}.catalog.${k}`);
-    for (const s of cat.sources || []) assert.ok(typeof s === 'string' && parseSource(s).kind, `${w}.catalog.sources: compact string`);
-    assert.equal(cat.src_rows, undefined, `${w}.catalog: src_rows is gone`);
-    assert.ok(Number.isInteger(cat.tier), `${w}.catalog.tier`); assert.ok(cat.default_visible === undefined || typeof cat.default_visible === 'boolean', `${w}.catalog.default_visible`);
-    if (o.track) {
-      const d = checkTrack(o.track, w);
-      assert.ok(d.t0_ms >= win.t0 - 1 && d.t1_ms <= win.t1 + 1, `${w}: track outside the window`);
-    }
-    if (o.fit) assert.ok(typeof o.fit === 'object', `${w}.fit`);
-    if (o.caveat != null) isStr(o.caveat, `${w}.caveat`);
-    checkTracklets(o.tracklets || [], w);
-  }
-  for (const [cid, a] of Object.entries(n.attached || {})) { assert.ok(ids.has(cid), `attached ${cid}: not a catalog target`); checkTracklets(a.tracklets, `attached ${cid}`); }
-  for (const r of n.removed) { isStr(r.desig, 'removed.desig'); isIso(r.removed_utc, 'removed.removed_utc'); isStr(r.reason, 'removed.reason'); }
 });
 
 // web/assets/hipparcos.json as scripts/build_site.mjs inlines it and web/sky.js unpackStars() reads it (EFF-8): three
@@ -218,4 +204,46 @@ test('hipparcos.json: packed star catalog', () => {
     bright += v < 1.6;
   }
   assert.ok(bright > 10 && bright < 30, `bright stars V<1.6: ${bright}`);
+});
+
+// The on-request NEOCP helper's answer (scripts/serve.py GET /api/neocp/<DESIG>, cle.request.respond) as the fixture
+// writes it for tests/browser.mjs to route-fulfil: the track and tracklet contract above, the catalog entry of a
+// requested object, and the fit / request fields web/ui/neocp.js shows. tests/test_request.py checks that its key sets
+// match a real helper answer.
+const reqFile = path.join(root, 'build/fixture/request/C46FX01.json');
+test('fixture helper answer (cle/neocp-request@1): track, tracklets, catalog, fit, request', { skip: existsSync(reqFile) ? false : 'fixture not built (npm run fixture)' }, () => {
+  const r = JSON.parse(readFileSync(reqFile, 'utf8')), o = r.object, w = `request ${r.desig}`;
+  assert.equal(r.ok, true); assert.equal(r.schema, 'cle/neocp-request@1'); assert.match(r.desig, /^[A-Za-z0-9]{5,8}$/);
+  isIso(r.built_utc, `${w}.built_utc`); isIso(r.window.start_utc, `${w}.window.start_utc`); isIso(r.window.stop_utc, `${w}.window.stop_utc`);
+  const t0 = Date.parse(r.window.start_utc), t1 = Date.parse(r.window.stop_utc);
+  assert.ok(t0 < t1 && t1 - t0 <= 45 * 86400e3, `${w}: window`);
+  for (const k of ['cid', 'catalog', 'track', 'fit', 'caveat', 'tracklets', 'rms_arcsec', 'request']) assert.ok(k in o, `${w}: object.${k}`);
+  const d = checkTrack(o.track, `${w}.track`);
+  assert.ok(d.t0_ms >= t0 - 1 && d.t1_ms <= t1 + 1, `${w}: track outside the window`);
+  assert.ok(o.tracklets.length > 0, `${w}: tracklets`); checkTracklets(o.tracklets, w);
+  for (const tk of o.tracklets) tk.t_ms.forEach(x => assert.ok(x >= t0 && x <= t1, `${w}: tracklet epoch outside the window`));
+  isStr(o.caveat, `${w}.caveat`); isNum(o.rms_arcsec, `${w}.rms_arcsec`);
+  const c = o.catalog;
+  assert.equal(o.cid, r.desig.toLowerCase()); assert.equal(c.id, o.cid); assert.equal(c.name, r.desig); assert.equal(c.label, r.desig);
+  assert.equal(c.group, 'NEOCP · requested'); assert.equal(c.chunk, null, `${w}: the track travels in the answer`);
+  assert.ok(c.draw === true && c.drawn === true && c.default_visible === true && c.tier === 1, `${w}: drawn, visible, tier 1`);
+  assert.equal(c.natural, undefined); isStr(c.regime, `${w}.regime`); isStr(c.status, `${w}.status`); isStr(c.caveat, `${w}.catalog.caveat`);
+  const sources = c.sources.map(s => { isStr(s, `${w}.sources`); return parseSource(s); });
+  assert.ok(sources[0].primary && sources[0].kind === 'pluto_mpec' && sources[0].ref.endsWith(`/${r.desig}.htm`), `${w}: primary pluto_mpec source`);
+  assert.ok(sources.some(s => s.kind === 'neocp_obs'), `${w}: neocp_obs source`);
+  assert.ok(Array.isArray(c.links) && c.links.every(l => typeof l.label === 'string' && /^https:\/\//.test(l.url)), `${w}.links`);
+  assert.ok(c.trail && Number.isFinite(c.trail.past_s) && Number.isFinite(c.trail.future_s), `${w}.trail`);
+  for (const k of ['a_km', 'e', 'i_deg', 'period_d', 'peri_km', 'apo_km']) assert.ok(c.elements[k] === null || typeof c.elements[k] === 'number', `${w}.elements.${k}`);
+  const f = o.fit;
+  assert.ok(['fo', 'fo_daily', 'page_sv', 'page_table'].includes(f.mode), `${w}: fit.mode ${f.mode}`);
+  assert.ok(Number.isInteger(f.n_obs) && f.n_obs > 0, `${w}.fit.n_obs`); isNum(f.arc_d, `${w}.fit.arc_d`); isNum(f.rms_arcsec, `${w}.fit.rms_arcsec`);
+  isIso(f.obs_first, `${w}.fit.obs_first`); isIso(f.obs_last, `${w}.fit.obs_last`);
+  assert.ok(Array.isArray(f.stations) && f.stations.length > 0 && f.stations.every(s => /^[0-9A-Z]{3}$/.test(s)), `${w}.fit.stations`);
+  assert.deepEqual([...new Set(o.tracklets.map(t => t.stn))].sort(), [...f.stations].sort(), `${w}: tracklet stations = fit.stations`);
+  const q = o.request;
+  assert.equal(q.desig, r.desig); assert.equal(q.mode, f.mode); isIso(q.fetched_utc, `${w}.request.fetched_utc`); isIso(q.page_created_utc, `${w}.request.page_created_utc`);
+  for (const k of ['n_obs_mpc', 'n_obs_page', 'n_obs_used']) assert.ok(Number.isInteger(q[k]) && q[k] >= 0, `${w}.request.${k}`);
+  isBool(q.on_neocp, `${w}.request.on_neocp`); isBool(q.cached, `${w}.request.cached`); isBool(q.find_orb, `${w}.request.find_orb`);
+  isNum(q.seconds, `${w}.request.seconds`); assert.ok(Array.isArray(q.warnings), `${w}.request.warnings`);
+  assert.ok(o.tracklets.reduce((n, t) => n + t.n, 0) <= q.n_obs_used, `${w}: more tracklet dots than observations used`);
 });

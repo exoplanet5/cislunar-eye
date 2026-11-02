@@ -1,0 +1,93 @@
+/* Inspector cards (web/ui/readout.js; design §4): TARGET (#readout) and SITUATION (#situation). Tokens only; the regime
+   family colour arrives as --c. A .kv row is label | value | unit (each row a display:contents <div>). Nothing below 10 px. */
+.card{padding:8px 0;border-bottom:1px solid var(--line)}
+.card:last-child{border-bottom:0}
+/* the qualifier sits on the title's line and moves under it (right-aligned) when the 272 px mid inspector is too narrow */
+.card h4{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px;min-height:16px;margin:0 0 4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.card h4 span{min-width:0;margin-left:auto;overflow:hidden;text-overflow:ellipsis;font-weight:400;letter-spacing:0;text-transform:none;color:var(--muted)}
+.card p{margin:4px 0 0}
+.card .nw{white-space:nowrap}
+/* six whole 14 px lines, then it scrolls (a line is never cut in half); one line per source note (readout.noteLines) */
+.card .notes{max-height:84px;overflow:auto;overflow-wrap:anywhere}
+.card .notes span{display:block}
+.card .caveat{margin-top:8px}
+.card .acts{display:flex;gap:4px;flex:none}
+.card .acts button{height:22px;padding:0 6px;font-size:10px;color:var(--dim)}
+.card .acts button:hover{color:var(--ink)}
+.card .acts button[aria-pressed=true]:not(:hover){border-color:var(--line)}
+details.card>summary{list-style:none;cursor:pointer}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary h4{margin:0}
+details.card>summary h4::before{content:"▸";width:10px;color:var(--muted)}
+details.card[open]>summary h4::before{content:"▾"}
+details.card[open]>summary{margin-bottom:4px}
+
+/* identity */
+.ident{padding-top:4px}
+.idrow{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:8px;align-items:center;min-height:32px}
+.idrow h3{margin:0;font-size:15px;line-height:20px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 8px}
+.tag{padding:0 5px;font-size:10px;line-height:16px;color:var(--dim);border:1px solid var(--line);border-radius:3px;white-space:nowrap}
+.tag.fam{color:var(--ink);border-color:color-mix(in srgb,var(--c) 60%,transparent);background:color-mix(in srgb,var(--c) 14%,transparent)}
+
+/* key | value | unit */
+.kv{display:grid;grid-template-columns:fit-content(60%) minmax(0,1fr) 44px;column-gap:6px;margin:0;align-items:baseline}
+.kv>div{display:contents}
+.kv dt{font-size:10px;line-height:20px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kv dd{margin:0;font-size:12px;line-height:20px;text-align:right;white-space:nowrap}
+.kv dd.u{font-size:10px;color:var(--muted);text-align:left}
+.kv dd.big{font-size:16px;font-weight:700}
+.kv dd.sub{grid-column:2/4;margin-top:-2px;font-size:10px;line-height:14px;color:var(--dim);white-space:normal}
+.kv dd.txt{grid-column:2/4;padding:3px 0;font-size:11px;line-height:14px;white-space:normal;overflow-wrap:break-word}
+.kv.ids{grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);column-gap:8px}
+.kv.ids dd{font-size:11px;text-align:left;overflow:hidden;text-overflow:ellipsis}
+.two{display:grid;grid-template-columns:1.25fr 1fr;column-gap:12px}
+.two .kv{grid-template-columns:fit-content(60%) minmax(0,1fr) 22px;column-gap:4px}
+.request .wn,.fit-weak{color:var(--warn)}
+.fit-fair{color:var(--dim)}
+.fit-good{color:var(--q-fit)}
+.request .acts{margin-top:8px}
+
+/* data coverage over the window: data in the family colour (GP at 55 %), extrapolation hatched, the epoch tick in ink */
+.covbar{position:relative;height:8px;margin:8px 0 2px;background:var(--raised);border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.covbar i{position:absolute;top:0;bottom:0}
+.covbar .d{background:var(--c)}
+.covbar .gp{opacity:.55}
+.covbar .x{background:repeating-linear-gradient(90deg,var(--warn) 0 4px,transparent 4px 7px);opacity:.85}
+.covbar .ep{width:2px;margin-left:-1px;background:var(--ink)}
+.covlab{display:flex;justify-content:space-between;gap:8px;font-size:10px;line-height:14px;color:var(--muted);white-space:nowrap}
+.covlab span:nth-child(2){overflow:hidden;text-overflow:ellipsis}
+
+.stations{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.stn{display:inline-flex;align-items:center;gap:5px;padding:0 7px 0 6px;font-size:10px;line-height:18px;color:var(--ink);border:1px solid var(--line);border-radius:9px}
+.stn i{width:6px;height:6px;border-radius:50%;background:var(--c)}
+.stn small{font-size:10px;color:var(--muted)}
+
+/* SITUATION */
+.counts{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
+.counts th:not(:first-child){width:36px}
+.counts th{height:20px;padding:0 0 0 4px;font-size:10px;font-weight:400;letter-spacing:.04em;color:var(--muted);text-align:right}
+.counts th:first-child{padding:0;text-align:left}
+.counts td{height:20px;padding:0 0 0 4px;color:var(--dim);text-align:right;white-space:nowrap}
+.counts td:first-child{padding:0;text-align:left;color:var(--ink)}
+.counts td.z{font-size:inherit;color:var(--muted)}
+.counts tr.tot td{border-top:1px solid var(--line);color:var(--ink);font-weight:700}
+.counts tr[data-regime],.counts tr[data-id]{cursor:pointer}
+.counts tr[data-regime]:hover td,.counts tr[data-id]:hover td{background:var(--raised)}
+.counts .swatch{margin-right:8px}
+.counts.stale td:first-child::before{content:"⚠";margin-right:6px;color:var(--warn)}
+.counts.stale td:nth-child(2){width:72px;color:var(--muted);text-align:left}
+.counts.stale td:last-child{width:48px;color:var(--warn)}
+.card .lnk{height:auto;padding:0;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.counts .lnk{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+.counts.stale .lnk{max-width:calc(100% - 16px)}
+.card .lnk:hover{color:var(--accent-soft)}
+.window .key{display:flex;flex-wrap:wrap;gap:0 12px}
+.window .key b{color:var(--dim)}
+/* ≤ 1180 px (the 280 / 272 px Inspector) the long regime names take their short form; the phone sheet is wide again */
+.counts .s{display:none}
+@media(max-width:1180px){.counts .l{display:none}.counts .s{display:inline}}
+@media(max-width:700px){
+  .counts .l{display:inline}.counts .s{display:none}
+  .card .acts button{height:28px;min-width:28px}
+}

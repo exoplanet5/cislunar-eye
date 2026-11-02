@@ -1,6 +1,7 @@
-// Scale cues (V12, V1): a scale bar in the scene foot, a toggleable GEO / 1 LD rings layer about Earth, and edge
-// chevrons with range for whatever is off screen (Earth, the Moon, SE-L1/L2, the selected target, natural objects).
-// The bar and the chevrons are DOM (haloed Menlo like the labels); the rings are Line2 rings like the terminator.
+// Scale cues (V12, V1): a scale bar in the scene's bottom-right corner, a toggleable GEO / 1 LD rings layer about Earth,
+// and edge chevrons with range for whatever is off screen (Earth, the Moon, SE-L1/L2, the selected target, requested
+// NEOCP objects). The bar and the chevrons are DOM (haloed Menlo like the labels); the rings are Line2 rings like the
+// terminator.
 import * as THREE from 'three';
 import { ring } from './bodies.js';
 import { RE_KM } from '../states.js';
@@ -11,18 +12,17 @@ import { token } from '../ui/theme.js';
 
 export { edgePoint };
 
-const GEO_KM = 42164, AXIS = new THREE.Vector3(0, 0, 1), DEG = Math.PI / 180;
-const CSS = '.scale-bar{position:absolute;right:18px;bottom:44px;z-index:2;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dim);pointer-events:none;text-shadow:0 0 5px var(--surface)}'
-  + '.scale-bar i{display:block;height:5px;border:1px solid var(--dim);border-top:0}'
-  + '@media(max-width:1400px){.scale-bar{bottom:24px}}@media(max-width:700px){.scale-bar{right:14px;bottom:22px}}';
+const GEO_KM = 42164, AXIS = new THREE.Vector3(0, 0, 1), DEG = Math.PI / 180, EDGE = 8;     // chevrons stay ≥ 8 px inside the scene
+const CSS = '.scale-bar{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dim);pointer-events:none;text-shadow:0 0 5px var(--surface)}'
+  + '.scale-bar i{display:block;height:5px;border:1px solid var(--dim);border-top:0}';
 
 function style() {
   if (document.getElementById('scalecues-style')) return;
   const el = document.createElement('style'); el.id = 'scalecues-style'; el.textContent = CSS; document.head.appendChild(el);
 }
 
-// "100,000 km" / "1 LD" / "1 Mkm" bracket sized at the focus plane, appended to `parent`: the scene foot's right column
-// (#foot-right, where the template lays it out statically above the hint) or the scene itself (absolute, bottom right).
+// "100,000 km" / "1 LD" / "1 Mkm" bracket sized at the focus plane, laid out statically in `parent` (the template's
+// #foot-right, pinned to the scene's bottom-right corner).
 export class ScaleBar {
   constructor(parent) {
     style();
@@ -103,8 +103,8 @@ export class Chevrons {
       if (Math.abs(a - (el.angle ?? 99)) > 2e-3) { el.firstChild.style.transform = `rotate(${a.toFixed(3)}rad)`; el.angle = a; }
       if (el.right !== p.right) { el.classList.toggle('right', p.right); el.right = p.right; }
       el.boxW ||= el.offsetWidth;
-      const b = placeEdgeBox({ x: Math.round(Math.max(4, Math.min(w - el.boxW - 4, p.right ? p.x - el.boxW + 12 : p.x - 2))), y: Math.round(p.y - 2),
-        width: el.boxW, height: 16 }, [...boxes, ...keepOut], h);                       // clear of the title, legend, Sun and each other
+      const b = placeEdgeBox({ x: Math.round(Math.max(EDGE, Math.min(w - el.boxW - EDGE, p.right ? p.x - el.boxW + 12 : p.x - 2))), y: Math.round(p.y - 2),
+        width: el.boxW, height: 16 }, [...boxes, ...keepOut], h);                       // clear of the scale bar, the Sun and each other
       const tf = `translate(${b.x}px,${b.y}px)`;
       if (el.tf !== tf) el.style.transform = el.tf = tf;                                // style writes only on change
       boxes.push(b); n++;

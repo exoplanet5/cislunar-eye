@@ -228,7 +228,7 @@ export class Trails {
       markDirty(b.geometry, wr.n);
       const heads = (anchor === 'earth' ? lists.earth.length + 1 : lists.moon.length) * 2 + 2;
       if (!this.heads[anchor] || this.heads[anchor].capacity < heads) {
-        this.heads[anchor]?.mesh.removeFromParent();
+        if (this.heads[anchor]) { this.heads[anchor].mesh.removeFromParent(); this.heads[anchor].geometry.dispose(); }
         const h = this.heads[anchor] = trailGeometry(heads + 16);
         h.mesh = this.mesh(h.geometry, group);
       }
@@ -248,7 +248,7 @@ export class Trails {
 
   // Re-emit the focused target's trail relative to A = its current frame position.
   anchor() {
-    const T = this.focusT?.track ? this.focusT : null;              // a NEOCP refresh can drop the focused track
+    const T = this.focusT?.track ? this.focusT : null;              // a removed NEOCP request drops the focused track
     if (!this.frame) return;
     if (!T) { if (this.focusBatch) markDirty(this.focusBatch.geometry, 0); return; }
     if (T.has) {

@@ -1,4 +1,5 @@
-// Targets from catalog.js + targets-*.js + neocp.js, evaluated each frame in the active display frame.
+// Targets from catalog.js + targets-*.js (and NEOCP objects requested at runtime), evaluated each frame in the active
+// display frame.
 import * as THREE from 'three';
 import { decode, decodeTrack, parseSource } from './loader.js';
 import { sampleTrack, sampleSegment, RE_KM, GM_EARTH, GM_MOON } from './states.js';
@@ -17,7 +18,7 @@ const ORDER = Object.keys(PALETTE);
 
 export function shapeOf(cat) {
   const t = (cat.obj_type || '').toLowerCase();
-  return t === 'payload' ? 0 : t === 'rocket_body' ? 1 : t === 'natural' ? 3 : 2;
+  return t === 'payload' ? 0 : t === 'rocket_body' ? 1 : 2;
 }
 
 // Regime default trail lengths (§9.4; HEO half a period back, as cle.catalog.trail), seconds.
@@ -66,9 +67,8 @@ export class World {
     T.cat = cat; T.source = source;
     T.regime = this.regimes.get(cat.regime) || this.regimes.get('OTHER');
     T.color = new THREE.Color(T.regime.color); T.css = T.regime.color;
-    T.natural = cat.natural === true || (cat.obj_type || '').toLowerCase() === 'natural';
     T.tier = cat.tier ?? 1; T.draw = cat.draw !== false && cat.draw !== 'N'; T.why = cat.not_drawn_reason || '';
-    T.shape = T.natural ? 3 : shapeOf(cat);
+    T.shape = shapeOf(cat);
     T.trail = defaultTrail(cat, this.window_s);
     T.label = cat.label || cat.name || cat.id;
     T.caveat = cat.caveat || ''; T.buildNote = T.payloadCaveat && T.payloadCaveat !== T.caveat ? T.payloadCaveat : '';

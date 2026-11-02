@@ -1,5 +1,6 @@
-// Page clock (ARCHITECTURE §6.1, §10, AM2): LIVE follows the wall clock inside the window; playback is capped at
-// 0.1 s of wall time per frame; time always clamps to the data window (no extrapolation).
+// Page clock (ARCHITECTURE §6.1, §10, AM2): LIVE follows the wall clock inside the window and reports a change once per
+// wall-clock second (the scene redraws at 1 Hz); playback is capped at 0.1 s of wall time per frame; time always clamps
+// to the data window (no extrapolation).
 export const SPEEDS = [[1, '1×'], [60, '1 min / s'], [600, '10 min / s'], [3600, '1 h / s'], [21600, '6 h / s'], [86400, '1 d / s']];
 
 export class Clock {
@@ -16,12 +17,13 @@ export class Clock {
     return this.live;
   }
 
-  // Advance by dt seconds of wall time; returns true when the epoch changed.
-  tick(dt, frameMs = 0) {
+  // Advance by dt seconds of wall time; returns true when the epoch (or the LIVE state) changed.
+  tick(dt) {
     if (this.live) {
-      if (frameMs - this.lastLive < 100) return false;            // LIVE redraws at 10 Hz
-      this.lastLive = frameMs;
-      if (!this.liveAvailable) { this.live = false; return false; }
+      const second = Math.floor(this.wall() / 1000);
+      if (second === this.lastLive) return false;
+      this.lastLive = second;
+      if (!this.liveAvailable) { this.live = false; return true; }
       const t = this.clamp(this.wall()), changed = t !== this.t; this.t = t; return changed;
     }
     if (!this.playing || !dt) return false;

@@ -1,6 +1,6 @@
 """Workflow and ops rules (REVIEW DW-01, DW-02, DW-04a, DW-13, C7): one window per make, the states_report / export
-window guards, `export --neocp-only` leaving the manifest alone, a failed Space-Track pull recorded and survived,
-ops/run.sh locking, logging and window pinning, scripts/status.py exit codes.
+window guards, the retired live-NEOCP flow (no update-neocp, no neocp.js; the legacy launchd agent still uninstalled),
+a failed Space-Track pull recorded and survived, ops/run.sh locking and logging, scripts/status.py exit codes.
 
     ~/.venvs/astro313/bin/python -I -m unittest discover -s tests -p 'test_*.py'
 """
@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from cle import catalog, cli, export  # noqa: E402
 from cle.statetable import Segment, StateTable  # noqa: E402
-from cle.timeutil import iso, parse_iso, window  # noqa: E402
+from cle.timeutil import iso, window  # noqa: E402
 
 NOW = "2026-10-21T13:00:00Z"
 WIN, OTHER = window(NOW), window("2026-10-22T13:00:00Z")
@@ -57,12 +57,13 @@ class MakeWindowTest(unittest.TestCase):
         self.assertGreaterEqual(len(found), 12)
         self.assertEqual(set(found), {NOW})
         self.assertIn("build_master.py --now 2026-10-21", out)
-        steps = ["neocp_live.py", "extract_all.py", "validate_source_tsv.py", "build_master.py", "git diff --stat -- catalog/",
+        steps = ["extract_all.py", "validate_source_tsv.py", "build_master.py", "git diff --stat -- catalog/",
                  "states --adapter horizons", "states --adapter gp --fetch", "tles log -1", "states --adapter fo", "states --offline",
                  "cle.py export", "cle.py validate", "build_site.mjs", "unittest discover", "sanity_check.py", "browser.mjs --dist"]
         at = [out.index(s) for s in steps]
         self.assertEqual(at, sorted(at), "daily order: " + " < ".join(steps))
         self.assertNotIn("horizons_all_spacecraft", out)          # the validator runs over build_master's SOURCES only
+        self.assertNotIn("neocp_live.py", out)                    # NEOCP is on request; neocp-live is manual
 
     def test_unset_or_empty_now_is_floored_once(self):
         """Unset or empty CLE_NOW (the old `export CLE_NOW` bug) becomes one wall-clock hour for the whole make."""
@@ -75,9 +76,19 @@ class MakeWindowTest(unittest.TestCase):
     def test_wiring(self):
         out, _ = make_n("sweep", NOW)
         self.assertIn(f"horizons_sweep.py --now {NOW} --in-scope-only", out)
-        out, _ = make_n("update-neocp", NOW)
-        self.assertIn("export --neocp-only", out)
-        self.assertNotRegex(out, r"cle\.py export\s*$")
+        out, _ = make_n("neocp-live", NOW)                         # manual catalog-source refresh, kept
+        self.assertIn("neocp_live.py", out)
+        r = subprocess.run(["make", "-n", "update-neocp"], cwd=ROOT, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)                       # the hourly target is retired
+        out, _ = make_n("install-launchd", NOW)                    # installs the daily only; unloads the hourly first
+        self.assertRegex(out, r"for a in com\.cislunar-eye\.daily; do cp ops/launchd/\$a\.plist")
+        self.assertRegex(out, r"for a in com\.cislunar-eye\.neocp; do launchctl bootout gui/\$\(id -u\)/\$a 2>/dev/null; "
+                              r"rm -f \S+/\$a\.plist; done")
+        self.assertNotIn("cp ops/launchd/com.cislunar-eye.neocp", out)
+        self.assertEqual(sorted(p.name for p in (ROOT / "ops/launchd").glob("*.plist")), ["com.cislunar-eye.daily.plist"])
+        out, _ = make_n("uninstall-launchd", NOW)                  # a machine that installed the hourly agent loses it
+        self.assertIn("launchctl bootout gui/$(id -u)/$a", out)
+        self.assertRegex(out, r"for a in com\.cislunar-eye\.daily com\.cislunar-eye\.neocp; do")
         out, _ = make_n("update-fits", NOW)
         self.assertIn("fits_changed.py", out)
         self.assertIn("states --adapter fo", out)
@@ -139,30 +150,32 @@ class ExportWindowTest(unittest.TestCase):
         self.assertEqual(len(res["skipped"]), 1)                      # b was loaded and refused; c never loaded
         self.assertIn(b, res["skipped"][0])
 
-    def test_neocp_only_touches_only_the_neocp_entry(self):
-        """DW-01 / §13: `export --neocp-only` rewrites neocp.js and the manifest's neocp entry, nothing else."""
+    def test_retired_neocp_sidecars_are_deleted(self):
+        """Live NEOCP is on request: export writes no neocp.js / targets-neocp.js, deletes stale copies, and the
+        manifest lists exactly the sidecars on disk; `cle export --neocp-only` is gone."""
+        rows = [r for r in catalog.targets() if r["draw"] == "Y"][:1]
         with tempfile.TemporaryDirectory() as d:
-            build, dist = Path(d) / "build", Path(d) / "dist"
-            build.mkdir()
-            build.joinpath("neocp.json").write_text('{"neocp_snapshot_utc": "2026-10-21T07:02:26Z", "objects": {}}')
-            export.write_js(dist / "a.js", "a", {"x": 1})
-            old = {"schema": "cle/manifest@1", "built_utc": "2026-01-01T00:00:00Z", "now_utc": "2026-01-01T00:00:00Z",
-                   "files": {"a.js": {"bytes": 1, "sha256": "keep"}, "neocp.js": {"bytes": 2, "sha256": "stale"}, "gone.js": {"bytes": 3, "sha256": "g"}}}
-            export.write_js(dist / "manifest.js", "manifest", old)
-            a_before = (dist / "a.js").read_text()
-            with mock.patch.object(export, "BUILD", build), mock.patch.object(export, "DIST", dist):
-                res = export.run(WIN, None, neocp_only=True)
-                new = export.read_js(dist / "manifest.js")
-                self.assertEqual(res, {"files": ["neocp.js"]})
-                self.assertEqual({k: v for k, v in new.items() if k != "files"}, {k: v for k, v in old.items() if k != "files"})
-                self.assertEqual(new["files"]["a.js"], old["files"]["a.js"])
-                self.assertEqual(new["files"]["gone.js"], old["files"]["gone.js"])
-                self.assertEqual(new["files"]["neocp.js"], {"bytes": (dist / "neocp.js").stat().st_size, "sha256": export.hashlib.sha256((dist / "neocp.js").read_bytes()).hexdigest()})
-                self.assertEqual((dist / "a.js").read_text(), a_before)
-                self.assertEqual(sorted(p.name for p in dist.iterdir()), ["a.js", "manifest.js", "neocp.js"])
-                (dist / "manifest.js").unlink()                       # no manifest yet: a full one is written
-                export.run(WIN, None, neocp_only=True)
-                self.assertEqual(sorted(export.read_js(dist / "manifest.js")["files"]), ["a.js", "neocp.js"])
+            build, dist, states = Path(d) / "build", Path(d) / "dist", Path(d) / "build/states"
+            table(rows[0]["cid"], WIN).save(states)
+            build.joinpath("states_report.json").write_text(json.dumps({"window": export.window_of(WIN), "now_utc": NOW,
+                                                                        "targets": {rows[0]["cid"]: {"status": "ok"}}}))
+            for name in ("neocp.js", "targets-neocp.js"):
+                export.write_js(dist / name, name[:-3], {"objects": {}})
+            with mock.patch.object(export, "STATES", states), mock.patch.object(export, "BUILD", build), \
+                    mock.patch.object(export, "DIST", dist), mock.patch.object(export, "core", lambda win, ctx: {"schema": "cle/core@1"}), \
+                    mock.patch.object(export, "regime_now", lambda *x: {"regime_now": "", "check": None, "pass": None}), \
+                    mock.patch.object(export.catalog, "targets", lambda *x, **k: rows):
+                res = export.run(WIN, None)
+            on_disk = sorted(p.name for p in dist.glob("*.js"))
+            man = export.read_js(dist / "manifest.js")
+        self.assertEqual(res["drawn"], 1)
+        self.assertNotIn("neocp.js", on_disk)
+        self.assertNotIn("targets-neocp.js", on_disk)
+        self.assertEqual(sorted(man["files"]), [f for f in on_disk if f != "manifest.js"])
+        self.assertEqual(sorted(res["chunks"]), sorted(catalog.CHUNKS))
+        self.assertNotIn("neocp", catalog.CHUNKS)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            cli.main(["export", "--neocp-only"])
 
 
 class StatesReportTest(unittest.TestCase):
@@ -175,7 +188,7 @@ class StatesReportTest(unittest.TestCase):
         fake = SimpleNamespace(build=lambda r, win, ctx: table(r["cid"]))
         with mock.patch.object(cli, "BUILD", build), mock.patch.object(cli, "STATES", build / "states"), \
                 mock.patch.object(cli.catalog, "targets", lambda *x, **k: [row]), mock.patch("cle.adapters.dispatch", lambda r: fake), \
-                mock.patch("cle.adapters.neocp.write_json"), mock.patch("cle.adapters.gp.fetch", side_effect=fetch or (lambda *x: "ok")), \
+                mock.patch("cle.astrometry.write_json"), mock.patch("cle.adapters.gp.fetch", side_effect=fetch or (lambda *x: "ok")), \
                 contextlib.redirect_stdout(io.StringIO()):
             cli.states(args, WIN, None)
         return json.loads(build.joinpath("states_report.json").read_text()), build / "states"
@@ -198,6 +211,37 @@ class StatesReportTest(unittest.TestCase):
             with mock.patch.object(export, "STATES", states):
                 self.assertEqual(export.not_drawn({"cid": "old-ok"}, rep["targets"]["old-ok"], WIN), NOT_RUN)
                 self.assertEqual(export.not_drawn({"cid": "fake-bg"}, rep["targets"]["fake-bg"], WIN), "")
+
+    def test_viewer_excluded_targets_are_retired(self):
+        """What earlier runs built for rows the viewer now leaves out (NEOCP live / archive, natural) is deleted: the
+        states files and report entries (they pinned old work/cache/fo stamps against prune.py) and build/neocp.json.
+        Other rows, and report entries of cids outside the master list, are left alone."""
+        rows = [{"cid": "mm-1", "group": "Natural companions (minimoons, quasi-satellites)", "obj_type": "natural"},
+                {"cid": "c46xx01", "group": "NEOCP live", "obj_type": "OTHER"},
+                {"cid": "arch-1", "group": "NEOCP archive (unidentified apparitions)", "obj_type": "debris"},
+                {"cid": "keep-me", "group": "Lunar orbiters", "obj_type": "spacecraft"}]
+        with tempfile.TemporaryDirectory() as d:
+            build = Path(d)
+            states = build / "states"
+            states.mkdir()
+            for cid in ("mm-1", "c46xx01", "keep-me"):
+                for ext in (".json", ".npz"):
+                    (states / f"{cid}{ext}").write_text("{}")
+            (build / "neocp.json").write_text("{}")
+            report = {"targets": {"mm-1": {"status": "ok"}, "arch-1": {"status": "ok"}, "keep-me": {"status": "ok"},
+                                  "juice": {"status": "ok"}}}
+            self.assertEqual(cli.retire_excluded(report, states, build, rows), ["mm-1", "c46xx01", "arch-1"])
+            self.assertEqual(sorted(report["targets"]), ["juice", "keep-me"])
+            self.assertEqual(sorted(p.name for p in states.iterdir()), ["keep-me.json", "keep-me.npz"])
+            self.assertFalse((build / "neocp.json").exists())
+            self.assertEqual(cli.retire_excluded(report, states, build, rows), [])          # idempotent
+            # cli.states runs it on the patched build/ (never the real one): the master list's naturals go
+            row = {"cid": "fake-bg", "draw": "Y", "primary_ephem": "bgtle:x.tle[2026-01-01..2026-12-31]", "norad": ""}
+            natural = next(r["cid"] for r in catalog.load()["objects"] if r.get("obj_type") == "natural")
+            rep, out = self.run_states(d, row, SimpleNamespace(only=None, adapter=None, tier=2, fetch=False),
+                                       {"targets": {natural: {"status": "ok"}}})
+            self.assertNotIn(natural, rep["targets"])
+            self.assertIn("fake-bg", rep["targets"])
 
     def test_failed_gp_fetch_is_recorded_and_the_run_continues(self):
         """DW-04(a): a Space-Track outage (CalledProcessError from the skill CLI) does not abort update-gp."""
@@ -264,20 +308,13 @@ class RunShTest(unittest.TestCase):
         text = self.log("test-browser")
         self.assertRegex(text, r"test-browser: FAILED rc=\d+ at step test-browser")
 
-    def test_update_neocp_uses_the_daily_window(self):
-        rep = export.load_json(ROOT / "build/states_report.json", None)
-        if not rep or not rep.get("window"):
-            self.skipTest("no build/states_report.json (make states)")
-        r = self.run_sh("update-neocp", "-n")
+    def test_no_window_pin(self):
+        """The hourly update-neocp (and its pin to the daily's window) is retired: run.sh leaves CLE_NOW to make."""
+        self.assertNotIn("update-neocp", (ROOT / "ops/run.sh").read_text())
+        r = self.run_sh("now")
         self.assertEqual(r.returncode, 0, r.stderr)
-        text = self.log("update-neocp")
-        t0, t1 = parse_iso(rep["window"][0]), parse_iso(rep["window"][1])
-        if t0 <= time.time() <= t1:
-            self.assertIn(f"CLE_NOW={rep['now_utc']} pinned", text)
-            self.assertIn(f"== update-neocp  CLE_NOW={rep['now_utc']}", text)
-        else:
-            self.assertNotIn("pinned", text)
-        self.assertIn("export --neocp-only", text)
+        self.assertNotIn("pinned", self.log("now"))
+        self.assertRegex(self.log("now"), r"== now  CLE_NOW=\d{4}-\d\d-\d\dT\d\d:00:00Z")
 
 
 class StatusTest(unittest.TestCase):
@@ -294,20 +331,23 @@ class StatusTest(unittest.TestCase):
         return rc, out.getvalue()
 
     def test_exit_codes(self):
+        """Only the daily's age and outcome decide: no NEOCP snapshot row or check (the hourly job is retired), so
+        an old work/cache/neocp snapshot does not make status fail."""
         now_s = time.time()
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             rc, out = self.run_status(root, now_s)
             self.assertEqual(rc, 1)
-            self.assertIn("NEOCP snapshot missing", out)
+            self.assertIn("last daily missing", out)
             (root / "work/cache/neocp").mkdir(parents=True)
-            (root / "work/cache/neocp/parsed.json").write_text(json.dumps({"stats": {"neocp_txt_mtime": iso(now_s - 3600)}}))
+            (root / "work/cache/neocp/parsed.json").write_text(json.dumps({"stats": {"neocp_txt_mtime": iso(now_s - 40 * 86400)}}))
             (root / "dist/data").mkdir(parents=True)
             (root / "dist/data/manifest.js").write_text(f'CLE.register("manifest", {{"built_utc":"{iso(now_s - 7200)}","files":{{}}}});\n')
             rc, out = self.run_status(root, now_s)
             self.assertEqual(rc, 0, out)
             self.assertIn("status: ok", out)
-            self.assertRegex(out, r"neocp snapshot \(neocp\.txt\)\s+\S+\s+1\.0 h")
+            self.assertNotIn("neocp", out.lower())
+            self.assertRegex(out, r"manifest built_utc\s+\S+\s+2\.0 h")
             (root / "work/logs").mkdir()
             log = root / "work/logs/daily-2026-10-22.log"
             log.write_text("2026-10-22T01:30:00Z daily: start\n2026-10-22T02:00:00Z daily: FAILED rc=2 at step catalog in 1800 s\n")
@@ -319,10 +359,8 @@ class StatusTest(unittest.TestCase):
             rc, out = self.run_status(root, now_s + 37 * 3600)
             self.assertEqual(rc, 1)
             self.assertIn("last daily 37.0 h old", out)
-            (root / "work/cache/neocp/parsed.json").write_text(json.dumps({"stats": {"neocp_txt_mtime": iso(now_s - 4 * 3600)}}))
-            rc, out = self.run_status(root, now_s)
-            self.assertEqual(rc, 1)
-            self.assertIn("NEOCP snapshot 4.0 h old", out)
+            (root / "work/logs/update-neocp-2026-10-22.log").write_text("2026-10-22T02:00:00Z update-neocp: FAILED rc=2\n")
+            self.assertEqual(self.run_status(root, now_s)[0], 0)          # an old hourly log is ignored
 
 
 class IntegrationFixesTest(unittest.TestCase):

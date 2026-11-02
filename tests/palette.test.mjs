@@ -3,7 +3,7 @@
 // dataviz skill's validate_palette.js; "adjacent" is the order the list shows the families in.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { register } from 'node:module';
 import path from 'node:path';
@@ -54,23 +54,25 @@ test('families: adjacent pairs in list order ΔE ≥ 13 under CVD and ≥ 15 nor
 });
 
 test('status and reference colours do not impersonate a series or a star', () => {
-  const sun = token('sun'), cyan = token('cyan'), warn = token('warn'), live = token('live'), lagrange = token('lagrange'), star = token('star');
-  assert.deepEqual([sun, cyan], ['#ffd54f', '#4fc3f7'], 'terminator / twilight convention');
+  const sun = token('sun'), warn = token('warn'), live = token('live'), lagrange = token('lagrange'), star = token('star');
+  assert.equal(sun, '#ffd54f', 'Sun 0° terminator convention (ift14_style.SUN)');
+  // The Earth twilight (Sun −12°) ring is gone and the natural objects with it: no --cyan / --natural token is left to
+  // impersonate a series (front-end spec A6).
+  assert.equal(token('cyan'), undefined, '--cyan (−12° ring) removed');
+  assert.equal(token('natural'), undefined, '--natural (minimoons) removed');
   const core = SKY_STYLE.starCore;
   assert.ok(core[0] === core[1] && core[1] === core[2], `star core is pure grey: ${core}`);
   assert.equal('#' + core.map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join(''), star);
   const near = (h, ref) => Math.min(dE(h, ref), dCVD(h, ref));
   // Stars, the Sun glyph/terminator and the Lagrange glyphs share the scene with every family: ≥ 8 normal and CVD. The
-  // −12° ring (on the globe, off by default) and the sight lines (station → bead) are drawn only at the Earth: ≥ 8
-  // normal for every family, CVD as well for the families drawn around the Earth. No light EM violet clears cyan under
-  // CVD next to the lunar blue (tests/palette search, review V3 second pass), so that pair is separated by place.
+  // sight lines (station → bead) are drawn only at the Earth: ≥ 8 normal for every family, CVD as well for the families
+  // drawn around the Earth (no light EM violet clears the sight-line blue under CVD next to the lunar blue, so that pair
+  // is separated by place).
   const AT_EARTH = new Set(['HEO', 'NEOCP']), sight = token('sightline');
   for (const [k, c] of ORDER.map((k, i) => [k, series[i]])) {
     for (const [name, ref] of [['sun', sun], ['star', star], ['lagrange', lagrange]]) assert.ok(near(c, ref) >= 8, `${k} ${c} vs ${name} ΔE ${near(c, ref).toFixed(1)}`);
-    for (const [name, ref] of [['cyan', cyan], ['sight line', sight]]) {
-      const d = AT_EARTH.has(k) ? near(c, ref) : dE(c, ref);
-      assert.ok(d >= 8, `${k} ${c} vs ${name} ΔE ${d.toFixed(1)}`);
-    }
+    const d = AT_EARTH.has(k) ? near(c, sight) : dE(c, sight);
+    assert.ok(d >= 8, `${k} ${c} vs sight line ΔE ${d.toFixed(1)}`);
   }
   assert.ok(near(warn, family.SE_L1) >= 8 && near(warn, sun) >= 8, `--warn vs SE-L1 ${near(warn, family.SE_L1).toFixed(1)} / sun ${near(warn, sun).toFixed(1)}`);
   assert.ok(Math.abs(((Math.atan2(oklab(lin(warn))[2], oklab(lin(warn))[1]) * 180 / Math.PI) + 360) % 360 - 90) > 15, '--warn is not yellow');
@@ -95,13 +97,28 @@ test('web/ui/theme.js fallbacks equal the web/theme.css tokens', () => {
 });
 
 test('template keeps no colours: every var(--token) and token() used in web/ is defined in theme.css, no fallbacks', () => {
+  // The template <style> and the lane sheets web/css/*.css (inlined after theme.css by scripts/build_site.mjs) hold no
+  // colour literal and no var() fallback. Custom properties are colour tokens from web/theme.css, the template's own
+  // non-colour layout properties (:root --mono --left-w --right-w --tb-h --row --ctl), or set at runtime: --c (regime
+  // colour, inline per element), --neocp (:root, app.js from the NEOCP_GEO family), --p (played fraction on the rail),
+  // --f / --w (timeline marks, ui/timeline.js).
   const tpl = readFileSync(path.join(root, 'web/index.template.html'), 'utf8'), style = tpl.slice(tpl.indexOf('<style>'), tpl.indexOf('</style>'));
-  const js = ['app.js', 'scene/overlays.js', 'scene/scalecues.js', 'scene/bodies.js', 'ui/legend.js', 'ui/readout.js', 'ui/list.js'].map(f => readFileSync(path.join(root, 'web', f), 'utf8')).join('\n');
-  const defined = new Set([...css.matchAll(/(--[a-z-]+):/g)].map(m => m[1]).concat(['--mono', '--sans', '--left-w', '--right-w', '--c']));
-  const used = new Set([...(style + js).matchAll(/var\((--[a-z-]+)/g), ...js.matchAll(/token\('(--[a-z-]+)'\)/g)].map(m => m[1]));
+  const sheets = readdirSync(path.join(root, 'web/css')).filter(f => f.endsWith('.css')).sort().map(f => [f, readFileSync(path.join(root, 'web/css', f), 'utf8')]);
+  assert.ok(sheets.length >= 4, `lane sheets in web/css: ${sheets.map(([f]) => f)}`);
+  const js = ['app.js', 'scene/overlays.js', 'scene/scalecues.js', 'scene/bodies.js', 'ui/legend.js', 'ui/readout.js', 'ui/list.js', 'ui/neocp.js', 'ui/timeline.js']
+    .map(f => readFileSync(path.join(root, 'web', f), 'utf8')).join('\n');
+  const layout = [...style.slice(style.indexOf(':root{'), style.indexOf('}', style.indexOf(':root{'))).matchAll(/(--[a-z-]+):([^;}]*)/g)];
+  for (const [, k, v] of layout) assert.doesNotMatch(v, /#[0-9a-f]{3,8}\b|rgb|hsl/i, `template :root ${k} is a layout property, not a colour`);
+  assert.deepEqual(layout.map(m => m[1]).sort(), ['--ctl', '--left-w', '--mono', '--right-w', '--row', '--tb-h']);
+  const defined = new Set([...css.matchAll(/(--[a-z-]+):/g)].map(m => m[1]).concat(layout.map(m => m[1]), ['--c', '--neocp', '--p', '--f', '--w']));
+  const all = style + sheets.map(([, t]) => t).join('\n') + js;
+  const used = new Set([...all.matchAll(/var\((--[a-z-]+)/g), ...js.matchAll(/token\('(--[a-z-]+)'\)/g)].map(m => m[1]));
   assert.deepEqual([...used].filter(k => !defined.has(k)), [], 'tokens used but not defined in web/theme.css');
-  assert.deepEqual(style.match(/var\(--[a-z-]+,[^)]*\)/g) || [], [], 'fallback colours in the template');
-  assert.deepEqual(style.replace(/url\("?data:[^)]*\)/g, '').match(/#[0-9a-f]{3,8}\b/gi) || [], [], 'literal colours in the template <style>');
+  assert.ok(!defined.has('--cyan') && !defined.has('--natural'), 'retired tokens stay retired');
+  for (const [name, text] of [['template <style>', style], ...sheets.map(([f, t]) => [`web/css/${f}`, t])]) {
+    assert.deepEqual(text.match(/var\(--[a-z-]+,[^)]*\)/g) || [], [], `fallback colours in ${name}`);
+    assert.deepEqual(text.replace(/url\("?data:[^)]*\)/g, '').match(/#[0-9a-f]{3,8}\b/gi) || [], [], `literal colours in ${name}`);
+  }
 });
 
 test('web/model.js fallback palette uses only catalog.py family colours', () => {
@@ -139,11 +156,21 @@ test('readout/tooltip: one GP-epoch line instead of source + caveat + build note
 });
 
 test('legend: two rows; tracklets (beads on a hairline) / sight line / rings keyed to their layers (V10)', () => {
+  // Long labels carry a short form (<span class="l">long</span><span class="s">short</span>, swapped at ≤ 1280 px so the
+  // strip keeps two rows at 1101 px; design §6). No natural ▲ and no Sun −12° key.
   const el = {}; renderLegend(el);
+  const ls = (l, s) => `<span class="l">${l}</span><span class="s">${s}</span>`;
   assert.equal(el.innerHTML.match(/class="row"/g).length, 2);
-  for (const [key, cls, text] of [['tracklets', 'lg-trk', 'tracklets'], ['sightlines', 'lg-line sight', 'sight line'], ['rings', 'lg-ring', 'GEO · Moon distance']])
-    assert.match(el.innerHTML, new RegExp(`data-legend="${key}"><i class="${cls}"[^>]*></i>${text}<`));
+  for (const [key, cls, text] of [['tracklets', 'lg-trk', 'tracklets'], ['sightlines', 'lg-line sight', 'sight line'], ['rings', 'lg-ring', ls('GEO · Moon dist.', 'GEO·LD')]])
+    assert.match(el.innerHTML, new RegExp(`data-legend="${key}"><i class="${cls}"[^>]*></i>${text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}</span>`));
   assert.doesNotMatch(el.innerHTML, /hairline<|1 LD/, 'one tracklet entry; the ring is the instantaneous Moon distance, not 1 LD');
-  assert.match(el.innerHTML, /○<\/b>extrap \/ stale/);
+  assert.ok(el.innerHTML.includes(`<b>○</b>${ls('extrap / stale', 'stale')}`), 'hollow = extrap / stale (short: stale, not a second "extrap")');
+  assert.ok(el.innerHTML.includes(`<b>■</b>${ls('rocket body', 'R/B')}`) && el.innerHTML.includes(`<i class="lg-line sun"></i>${ls('Sun 0° terminator', 'Sun 0°')}`), 'long/short labels');
   assert.match(el.innerHTML, /<b>●<i class="dimb">●<\/i><\/b>derelict/, 'derelict: the same dot at full and reduced alpha');
+  assert.doesNotMatch(el.innerHTML, /▲|natural|−12|twilight|data-legend="(nat|twilight)"/, 'no natural or Sun −12° key');
+  // every long label has a short one and vice versa, and no short label is longer than its long form
+  const pairs = [...el.innerHTML.matchAll(/<span class="l">([^<]*)<\/span><span class="s">([^<]*)<\/span>/g)];
+  assert.equal(pairs.length, (el.innerHTML.match(/class="l"/g) || []).length);
+  assert.equal(pairs.length, (el.innerHTML.match(/class="s"/g) || []).length);
+  for (const [, l, s] of pairs) assert.ok(s.length < l.length, `${s} shorter than ${l}`);
 });
