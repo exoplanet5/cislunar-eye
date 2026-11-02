@@ -101,7 +101,8 @@ a list click).
   drawable · 82 listed"), a search box (`/`; name, NORAD, COSPAR, Horizons ID), the tier chips with their counts and
   the grouped list. Group heads stick while the list scrolls and carry an eye, the family square, a fold caret (kept in
   localStorage) and shown / all. A row is eye · glyph (family colour; hollow, dimmed or empty as on the marker) · name
-  (T2 tag) · source letter and quality word (`H ref`, `G gp`, `F extr ⚠`) · range now · ⌖ (fly there). Rows with no
+  (T2 tag) · source letter and quality word (`H ref`, `G gp`, `F extr ⚠`, `S fit` for a state vector + HPOP) · range
+  now · ⌖ (fly there). Rows with no
   public ephemeris carry "listed, not drawn"; rows whose build failed carry "not drawn" with a short reason (the full
   error is in `build/validation_report.md`). The list is one tab stop: ↑ ↓ Home End move, Enter selects (on the selected
   row it flies), Space shows or hides the row or the whole group. Requested NEOCP objects are listed in the lookup, not
@@ -315,7 +316,9 @@ it repeats to ≈ 0.05 km, and the NEOCP-class fits stay bitwise identical betwe
   legs, one-day chunks and short tables drop find_orb's side files at once); an `update-fits` stamp (the find_orb
   targets' runs alone) is ≈ 18 MB. Requests to the helper run find_orb in `work/cache/request/fo/`, outside prune.
 - Weekly: the daily's `sweep` step re-probes Horizons once the audit table is more than 7 d old (`make sweep FORCE=1`
-  by hand). After `../neocpsat` changes: `make update-fits` (the daily runs it when `scripts/fits_changed.py` says so).
+  by hand).
+- By hand: a new state vector replaces its file in `catalog/statevec/`. Set the matching `[date..date]` in
+  `catalog/sources/manual.tsv` (a test checks it), then run `make catalog states export site` or wait for the daily. After `../neocpsat` changes: `make update-fits` (the daily runs it when `scripts/fits_changed.py` says so).
 - The page warns when its data window is about to end (the banner strip above the scene). A requested NEOCP object is
   fitted inside the build's window, so new NEOCP objects need a current build too.
 - Nothing here pushes, deploys or writes to sibling projects.
@@ -348,14 +351,15 @@ only by an explicit `make install-launchd` (copy to `~/Library/LaunchAgents` + `
 
 ## Known issues
 
-- **DRO-A and DRO-B are not in DROs in the current Space-Track data.** Each GP set, evaluated at its own epoch, puts
-  them 39,000–64,000 km from the Moon. A single SDP4 velocity is not usable for a lunar-dominated orbit, so
-  `gp.arc_fit` fits one Earth + Moon + Sun trajectory to the SDP4 positions (±12 h of each epoch) of the sets in the
-  last 25 days. DRO-A: the 2026-09-22 and 10-12 sets agree to 6,211 km rms; the orbit is lunar-bound and eccentric,
-  25,000–116,000 km from the Moon, with a predicted close pass of about 5,900 km on 2026-10-25 (extrapolated beyond
-  the last set, uncertain). DRO-B: one set (2026-09-21), 10,000–42,000 km from the Moon. Spans reaching back to
-  June/July do not fit (manoeuvres), and Bill Gray's TLEs end before them. Both are relabelled `EM_OTHER` in
-  `catalog/overrides.tsv`.
+- **DRO-A and DRO-B come from hand-supplied state vectors, not from Space-Track** (ARCHITECTURE AM14). The files
+  `catalog/statevec/DRO-A.txt` (2026-10-25T00:00Z) and `DRO-B.txt` (2026-10-12T00:00Z) use hpop's paste format (m, m/s,
+  Earth-centred ICRF, UTC). They are propagated with `../hpop` (`src/cle/adapters/hpop.py`; badge **S**), backward and
+  forward from the epoch across the window. Both are retrograde DRO loops 62,000–90,000 km from the Moon, so they are
+  `EM_DRO` again in `catalog/overrides.tsv`. hpop and `cle.nbody` started from the same state agree to 16 km (DRO-A) and
+  36 km (DRO-B) over the window. Quality is `fit` within 30 d of the vector's epoch and `extrap` beyond. The catalog
+  caveat says "stale" once the vector is more than 30 d from now. The earlier GP-fitted tracks put DRO-A 13,700–50,800 km
+  from the Moon ("lunar-bound, not a DRO") and were 105,000 km off the new vector at 2026-10-25. That came from SDP4
+  mean elements fitted to a DRO, which are not a Kepler orbit. The GP stays as the secondary ephemeris.
 - **ESCAPADE Blue/Gold** have finished their SE-L2 loiter and are on the return leg to the November 2026 Earth flyby;
   they are relabelled `EARTH_NEAR_HELIO` (group "Earth-return / near-Earth heliocentric") in `catalog/overrides.tsv`.
 - **Chang'e-6 orbiter** is listed but not drawn: it manoeuvres, its 2026-10-01 page is 4 observations over 23 minutes

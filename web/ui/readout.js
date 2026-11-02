@@ -11,7 +11,8 @@ const srcEpoch = src => Date.parse(EPOCH_AT.exec(src || '')?.[1]);
 const primary = c => (c.sources || []).find(s => s.primary) || (c.sources || [])[0];
 
 // Age of the data behind the current segment: Horizons retrieval, GP epoch, or end of the fitted arc (of the TLEs for a
-// Bill Gray TLE extrapolation). Sources such as "gp+nbody:59228@2026-10-12T19:06:43Z" carry their epoch after '@'. A
+// Bill Gray TLE extrapolation; of the state vector for hpop). Sources such as "gp+nbody:59228@2026-10-12T19:06:43Z" or
+// "hpop:DRO-A.txt@2026-10-25T00:00:00Z" carry their epoch after '@'. A
 // requested NEOCP object's arc ends at its last observation (fit.obs_last): its source range has dates only.
 export function dataAge(T, t) {
   const seg = T.seg || T.track?.segments.at(-1), c = T.cat;
@@ -24,7 +25,8 @@ export function dataAge(T, t) {
   const last = T.source === 'request' ? parse(T.request?.fit?.obs_last) : NaN;
   if (Number.isFinite(last)) return { label: 'arc end', ms: t - last, epoch: last };
   const epoch = srcEpoch(seg.src) || (gp ? parse(c.elements?.epoch) || parse(prim?.end) : parse(prim?.end) || parse(c.elements?.epoch));
-  return Number.isFinite(epoch) ? { label: gp ? 'GP epoch' : /(^|:)bgtle/.test(seg.src) ? 'TLE end' : 'arc end', ms: t - epoch, epoch } : null;
+  const label = gp ? 'GP epoch' : /(^|:)bgtle/.test(seg.src) ? 'TLE end' : /^hpop:/.test(seg.src) ? 'state epoch' : 'arc end';
+  return Number.isFinite(epoch) ? { label, ms: t - epoch, epoch } : null;
 }
 
 // Stale (§6.4): the catalog's own flag first (catalog.js `staleness.flag`: 'gp-stale' = Space-Track GP 30–120 d old,
@@ -253,11 +255,13 @@ function pointing(T, w, t) {
   set('ro-parallax', `≤ ${fmt(p, p < 1 ? 2 : 1)}`);
 }
 
-// Quality word in its colour, then what it rests on: the fit arc (the TLE span for a Bill Gray TLE), else QUALITY.
+// Quality word in its colour, then what it rests on: the fit arc (the TLE span for a Bill Gray TLE, the epoch of a
+// hand-supplied state vector), else QUALITY.
 function qualityHtml(T, seg, w) {
   const q = escapeHtml(seg.quality), p = primary(T.cat), s = Date.parse(p?.start), e = Date.parse(p?.end);
   if (!((q === 'fit' || q === 'extrap') && Number.isFinite(s) && Number.isFinite(e))) return `<span class="q q-${q}">${q}</span>${QUALITY[q] ? ` · ${QUALITY[q]}` : ''}`;
   const short = dayText(s, w.t0).length < 6 && dayText(e, w.t0).length < 6, day = x => `<span class="nw">${short ? dayText(x, w.t0) : utc(x).slice(0, 10)}</span>`;
+  if (p.kind === 'statevec') return `<span class="q q-${q}">${q}</span> · state vector of ${day(s)}`;
   return `<span class="q q-${q}">${q}</span> · ${p.kind === 'bgtle' ? 'TLEs' : 'fit arc'} ${day(s)} → ${day(e)}`;
 }
 

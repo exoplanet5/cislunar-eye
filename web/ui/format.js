@@ -37,8 +37,8 @@ export const durationText = ms => durationParts(ms).join(' ');
 
 export const radiiText = km => `${fmt(km / RE_KM, 2)} R⊕ · ${fmt(km / LD_KM, 3)} LD`;
 
-export const SOURCE_BADGE = { horizons: 'H', fo: 'F', bgtle: 'T', gp: 'G', extrap: 'X', neocp: 'N', pluto: 'N', de440s: 'D' };
-export const SOURCE_LABEL = { H: 'Horizons', G: 'Space-Track GP', F: 'find_orb fit', T: 'Bill Gray TLE', N: 'MPC + neocp2', X: 'extrapolated', D: 'DE440s' };
+export const SOURCE_BADGE = { horizons: 'H', fo: 'F', bgtle: 'T', gp: 'G', hpop: 'S', extrap: 'X', neocp: 'N', pluto: 'N', de440s: 'D' };
+export const SOURCE_LABEL = { H: 'Horizons', G: 'Space-Track GP', F: 'find_orb fit', T: 'Bill Gray TLE', S: 'state vector + HPOP', N: 'MPC + neocp2', X: 'extrapolated', D: 'DE440s' };
 export const badgeOf = src => SOURCE_BADGE[(src || '').split(/[:+_]/)[0]] || '·';      // gp+nbody → G, pluto_mpec → N
 
 // Marker glyph classes (list rows, inspector, NEOCP rows; the scene's markers.targetStyle): shape = object type

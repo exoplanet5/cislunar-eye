@@ -9,6 +9,7 @@ where `target` is one object of catalog/master_list.json (keys as in master_list
     bgtle:<file>[..]                  -> bgtle         (Bill Gray hex TLE inside its Range)
     spacetrack_gp:<norad>[..]         -> gp            (SDP4 -> TEME -> GCRS; EM_* regimes: n-body from GP state, AM6)
     neocpsat_fit:<path>[..]           -> fo            (local find_orb on the neocpsat obs, geocentric vectors)
+    statevec:<path>[..]               -> hpop          (hand-supplied state vector propagated with ../hpop, AM14)
     pluto_mpec:<url>[..]              -> neocp         (live NEOCP: find_orb on cached obs + tracklets)
     STALE <any of the above>          -> extrap        (latest state, Earth+Moon+Sun integration, AM5)
 """
@@ -22,6 +23,7 @@ KIND_TO_MODULE = {
     "bgtle": "bgtle",
     "spacetrack_gp": "gp",
     "neocpsat_fit": "fo",
+    "statevec": "hpop",
     "pluto_mpec": "neocp",
     "neocp_obs": "neocp",
 }

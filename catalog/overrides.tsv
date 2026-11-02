@@ -21,5 +21,5 @@ escapade-blue	group	Earth-return / near-Earth heliocentric	follows the regime ov
 escapade-gold	group	Earth-return / near-Earth heliocentric	follows the regime override
 escapade-blue	caveat	SE-L2 loiter finished; on the return leg to the Nov 2026 Earth gravity assist	Horizons -9
 escapade-gold	caveat	SE-L2 loiter finished; on the return leg to the Nov 2026 Earth gravity assist	Horizons -10
-dro-a	regime	EM_OTHER	Space-Track GP sets of 2026-09-22 and 10-12 fit one lunar-bound eccentric orbit (6,211 km rms), not a DRO
-dro-b	regime	EM_OTHER	Space-Track GP of 2026-09-21: lunar-bound eccentric orbit 10,000-42,000 km from the Moon; left its DRO in 2025
+dro-a	regime	EM_DRO	state vector of 2026-10-25 (catalog/statevec/DRO-A.txt) propagated with HPOP: retrograde loop 64,600-89,700 km from the Moon; the GP-based 'lunar-bound eccentric' reading of 2026-10 is superseded
+dro-b	regime	EM_DRO	state vector of 2026-10-12 (catalog/statevec/DRO-B.txt) propagated with HPOP: retrograde loop 61,900-90,200 km from the Moon, so back in a DRO after its 2025 resonant-orbit excursion

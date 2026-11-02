@@ -16,6 +16,30 @@
 
 ---
 
+## Amendment of 2026-11-02 (overrides AM6 and the body for the objects it names)
+
+- **AM14. Hand-supplied state vectors, propagated with ../hpop.** Your request: DRO-A and DRO-B from the state vectors
+  `DRO-A.txt` (2026-10-25T00:00Z) and `DRO-B.txt` (2026-10-12T00:00Z), propagated by `../hpop`.
+  - **Files and catalog.** The vectors live in `catalog/statevec/` in hpop's paste format (`<EPOCH>` UTC, `<X>`…`<Z_DOT>`
+    in m and m/s, Earth-centred ICRF). `catalog/sources/manual.tsv` (hand-written, no extractor) carries one row per
+    object with the new ephemeris kind `statevec:<path>[<epoch date>..<epoch date>]`; a test checks that the bracket
+    date matches the file's `<EPOCH>`. `build_master.judge` ranks a state vector 1.5 (after Horizons, before Bill Gray
+    TLEs, GP and fits) at any age: you replace or remove it by hand. Beyond 30 d from now its caveat starts "stale: ",
+    which the viewer marks ⚠. To update a vector, replace the file, fix the row's date, and run `make catalog states`.
+  - **Adapter** `src/cle/adapters/hpop.py` (`statevec` → `hpop`): imports hpop's `propagator` from `$CLE_HPOP_DIR`
+    (default `../hpop`), converts the state Earth → Moon with hpop's `convert_earth_to_moon`, and runs
+    `propagator.propagate` with `HPOPConfig` defaults (Moon-centred, DOP853 rtol 1e-12, GRGM660 harmonics to degree 10
+    inside 50 000 km, Earth and Sun point masses, DE440s through astropy) from the epoch to each window end. hpop's
+    `propagate` integrates backward for a negative duration (added 2026-11-02 for this; its forward runs are unchanged
+    bit for bit). The dense output is re-centred on the Earth with the Context's DE440s Moon and sampled on the regime
+    grid. `quality=fit` within 30 d of the epoch, `extrap` beyond; source `hpop:<file>@<epoch>`, viewer badge **S**.
+    `validation` holds the round trip at the epoch (< 1 mm), the Moon distance over the window, and the offset from
+    `cle.nbody` (Earth + Moon + Sun + J2) run from the same state (16 km for DRO-A, 36 km for DRO-B over the window
+    of 2026-11-02).
+  - **Regime.** Both tracks are retrograde loops 62 000–90 000 km from the Moon, so the two `overrides.tsv` rows now say
+    `EM_DRO`. They had said `EM_OTHER` because of the GP-fitted tracks (13 700–50 800 km, "not a DRO"), which these
+    vectors supersede. The Space-Track GP stays as the secondary ephemeris. AM6 is kept for EM_* objects that have only a GP.
+
 ## Amendments of 2026-11-01 (your decisions of the redesign; these override the body and, where they conflict, the amendments of 2026-10-21)
 
 Your request: keep the target list, its classification, the propagator and the coordinate converter; remove the

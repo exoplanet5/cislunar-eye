@@ -1047,10 +1047,10 @@ async function fixes(page) {
   });
   assert.ok(r.same && r.off === '', `t1 chip off/on restores the default set (off: ${r.off})`);
   assert.ok(r.tl.every(([, g, v]) => !g || v) && r.tl.some(([, g]) => !g), `a hidden target hides its tracklet group ${JSON.stringify(r.tl)}`);
-  assert.match(r.ibexTitle, /manoeuvre/); assert.equal(r.droBadge, 'G'); assert.equal(r.t3, true); assert.equal(r.lshape, 5);
+  assert.match(r.ibexTitle, /manoeuvre/); assert.equal(r.droBadge, 'S'); assert.equal(r.t3, true); assert.equal(r.lshape, 5);
   assert.ok(r.stale.length && r.stale.every(([, wn]) => wn === '⚠'), `catalog-stale rows carry ⚠: ${JSON.stringify(r.stale)}`);
   ok('review fixes', `chip t1 off/on keeps defaults; ${r.tl.filter(x => !x[1]).length}/${r.tl.length} tracklet groups hidden (target hidden, or no tracklet inside its drawn trail window); `
-    + `IBEX caveat kept; DRO-A badge G; ${r.stale.length} catalog-stale rows marked ⚠`);
+    + `IBEX caveat kept; DRO-A badge S; ${r.stale.length} catalog-stale rows marked ⚠`);
 
   // §9.2: focus JWST, camera 1.6 km away; f32 emulation of modelViewMatrix·vertex for the marker and the head end.
   await ev(page, () => { const c = window.__cle; c.select('jwst'); c.focusOn('jwst'); });

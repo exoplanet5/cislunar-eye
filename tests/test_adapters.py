@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cle import nbody, tracklets  # noqa: E402
-from cle.adapters import bgtle, extrap, fo, gp  # noqa: E402
+from cle.adapters import bgtle, extrap, fo, gp, hpop  # noqa: E402
 from cle.context import GM_EARTH, Context  # noqa: E402
 from cle.timeutil import parse_iso, window  # noqa: E402
 
@@ -25,6 +25,7 @@ WIN = window("2026-10-21T13:00:00Z")
 CTX = Context()
 HAVE_FO = fo.FO.exists()
 HAVE_BG = bgtle.GET_VECT.exists() and (bgtle.TLES / "tle_list.txt").exists()
+HAVE_HPOP = (hpop.HPOP_DIR / "propagator.py").exists()
 
 
 def horizons(cmd, start, stop, step="1 h"):
@@ -250,6 +251,54 @@ class ExtrapTest(unittest.TestCase):
         self.assertAlmostEqual(hit, WIN.t0_s + 1200, delta=601)
         far = lambda t: np.tile([1e5, 2e5, 0, 0, 0, 0], (len(np.atleast_1d(t)), 1))
         self.assertIsNone(extrap.impact(far, CTX, WIN.t0_s, WIN.t1_s))
+
+
+
+@unittest.skipUnless(HAVE_HPOP, "needs ../hpop")
+class HpopTest(unittest.TestCase):
+    """AM14: DRO-A / DRO-B state vectors propagated with hpop, in the window of 2026-11-02T05:00Z."""
+    W = window("2026-11-02T05:00:00Z")
+
+    @staticmethod
+    def row(cid, name, date):
+        return {"cid": cid, "regime": "EM_DRO", "primary_ephem": f"statevec:catalog/statevec/{name}[{date}..{date}]"}
+
+    def test_read_state_units_and_epoch(self):
+        te, epoch, rv = hpop.read_state(ROOT / "catalog/statevec/DRO-A.txt")
+        self.assertEqual(epoch, "2026-10-25T00:00:00.0000")
+        self.assertEqual(te, parse_iso("2026-10-25T00:00:00Z"))
+        self.assertAlmostEqual(rv[0], 365804.9577159475, places=9)            # m -> km
+        self.assertAlmostEqual(rv[5], 0.4458649630672148, places=12)           # m/s -> km/s
+        with tempfile.TemporaryDirectory() as d:                                # the same numbers in km are refused
+            f = Path(d) / "km.txt"
+            f.write_text("".join(f"<{k}>{v}</{k}>" for k, v in zip(hpop.TAGS, rv)) + f"<EPOCH>{epoch}</EPOCH>")
+            with self.assertRaises(ValueError):
+                hpop.read_state(f)
+
+    def test_dro_a_backward_and_forward_from_mid_window(self):
+        """The epoch (10-25) is inside the window: hpop runs back to 10-18 and on to 11-17; the track passes through
+        the file's state, stays in the DRO band and agrees with cle.nbody from the same state to tens of km."""
+        st = hpop.build(self.row("dro-a", "DRO-A.txt", "2026-10-25"), self.W, CTX)
+        te, _, rv = hpop.read_state(ROOT / "catalog/statevec/DRO-A.txt")
+        v = st.validation
+        self.assertEqual([s.quality for s in st.segments], ["fit"])
+        seg = st.segments[0]
+        self.assertEqual((seg.t_s[0], seg.t_s[-1]), (self.W.t0_s, self.W.t1_s))
+        k = np.searchsorted(seg.t_s, te)
+        self.assertEqual(seg.t_s[k], te)                                        # the epoch is a grid epoch here
+        self.assertLess(np.linalg.norm(seg.r_km[k] - rv[:3]), 1e-3)
+        self.assertLess(np.linalg.norm(seg.v_kms[k] - rv[3:]), 1e-9)
+        self.assertLess(v["epoch_round_trip_m"], 1.0)
+        self.assertTrue(55000 < v["moon_km_window"][0] < v["moon_km_window"][1] < 100000, v["moon_km_window"])
+        self.assertLess(v["hpop_vs_nbody_km"]["max"], 100)
+        self.assertEqual(v["hpop_ephemeris"], "de440s.bsp")
+
+    def test_dro_b_extrapolated_after_30_days(self):
+        st = hpop.build(self.row("dro-b", "DRO-B.txt", "2026-10-12"), self.W, CTX)
+        self.assertEqual([(s.quality, s.join_before) for s in st.segments], [("fit", "start"), ("extrap", "continuous")])
+        self.assertEqual(st.segments[1].t0_s, st.segments[0].t_s[-1])
+        self.assertEqual(st.segments[1].t0_s, parse_iso("2026-11-11T00:00:00Z"))   # 10-12 + 30 d, on the hourly grid
+        self.assertNotIn("stale", st.caveat)                                       # 21 d old at now
 
 
 if __name__ == "__main__":

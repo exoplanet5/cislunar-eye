@@ -12,7 +12,7 @@ Default display window under discussion: 2026-09-21 → 2026-11-20 UTC.
 
 | column | meaning |
 |---|---|
-| `src` | source key: `neocpsat`, `billgray`, `rocketdebris`, `lunarmission`, `horizons`, `neocp`, `news` |
+| `src` | source key: `neocpsat`, `billgray`, `rocketdebris`, `lunarmission`, `horizons`, `neocp`, `news`, `manual` (hand-written rows, `manual.tsv`; no extractor) |
 | `src_ref` | row key inside that source (file name, temp desig, TSV label, URL) |
 | `name` | common name, e.g. `JWST`, `Chang'e-3 CZ-3B R/B` |
 | `aliases` | other names / temp desigs / Horizons names, `;`-separated |
@@ -27,7 +27,7 @@ Default display window under discussion: 2026-09-21 → 2026-11-20 UTC.
 | `a_km`,`e`,`incl_deg`,`perigee_km`,`apogee_km` | latest known osculating elements; distances from body centre |
 | `elem_epoch` | epoch of those elements, ISO UTC |
 | `frame_center` | `earth`, `moon`, `sun` for the elements above |
-| `ephem_sources` | every ephemeris source known for this object with its coverage, `;`-separated, form `kind:ref[start..end]`, kinds: `horizons`, `bgtle` (Bill Gray hex TLE file), `neocpsat_fit` (find_orb fit/combined MPEC in ../neocpsat), `neocp_obs` (80-col obs file), `pluto_mpec` (projectpluto pseudo-MPEC URL), `spacetrack_gp`, `tle_other` |
+| `ephem_sources` | every ephemeris source known for this object with its coverage, `;`-separated, form `kind:ref[start..end]`, kinds: `horizons`, `bgtle` (Bill Gray hex TLE file), `neocpsat_fit` (find_orb fit/combined MPEC in ../neocpsat), `neocp_obs` (80-col obs file), `pluto_mpec` (projectpluto pseudo-MPEC URL), `spacetrack_gp`, `statevec` (state vector file, path from the project root, propagated with ../hpop; `[epoch date..epoch date]`), `tle_other` |
 | `covers_now` | `Y` if at least one listed ephemeris source covers the reference day, `N` otherwise, `?` if unknown |
 | `notes` | short free text; cite the line/section of the source |
 

@@ -62,6 +62,30 @@ class JudgeTest(unittest.TestCase):
         self.assertEqual(bm.judge({"kind": "horizons", "start": None, "end": bm.W0 - timedelta(days=1)}, True)[0], None)
         self.assertEqual(bm.judge({"kind": "neocpsat_fit", "start": None, "end": bm.NOW - timedelta(days=10)}, False)[:2], (4, "fit"))
 
+    def test_statevec_ranks_after_horizons_at_any_age(self):
+        """A hand-supplied state vector (AM14) beats Bill Gray, GP and fits whatever its age; it is replaced by hand."""
+        bm.set_now("2026-11-02")
+        for days in (-5, 0, 21, 400):
+            ep = bm.NOW - timedelta(days=days)
+            rank, cov, _ = bm.judge({"kind": "statevec", "start": ep, "end": ep, "ref": "x.txt", "raw": ""}, False)
+            self.assertEqual(cov, "window", days)
+            self.assertTrue(1 < rank < 2, days)          # partial Horizons 1 < state vector < Bill Gray TLE 2
+        self.assertIsNone(bm.judge({"kind": "statevec", "start": None, "end": None, "ref": "x.txt", "raw": ""}, False)[0])
+
+
+class StatevecFilesTest(unittest.TestCase):
+    def test_manual_rows_match_their_files(self):
+        """Every statevec item in manual.tsv names an existing file whose <EPOCH> date is the item's [date..date]."""
+        import re
+        from cle.adapters import hpop
+        items = [i for r in bm.read_tsv(bm.SRC / "manual.tsv") for i in r["ephem_sources"].split(";") if i.startswith("statevec:")]
+        self.assertTrue(items)
+        for item in items:
+            m = re.fullmatch(r"statevec:(.+)\[(\d{4}-\d\d-\d\d)\.\.(\d{4}-\d\d-\d\d)\]", item)
+            self.assertIsNotNone(m, item)
+            _, epoch, _ = hpop.read_state(ROOT / m[1])
+            self.assertEqual((m[2], m[3]), (epoch[:10], epoch[:10]), f"{item}: file epoch {epoch}")
+
 
 @unittest.skipUnless(HAVE_SOURCES, "catalog/sources not present")
 class MergeTest(unittest.TestCase):

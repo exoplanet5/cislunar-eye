@@ -29,7 +29,7 @@ REGIME = {"LUNAR_ORBIT", "EM_L1", "EM_L2", "EM_DRO", "EM_OTHER", "CISLUNAR_HEO",
 STATUS = {"active", "derelict", "decayed", "lunar_impact", "landed", "escaped",
           "returning", "lost", "unknown"}
 KINDS = {"horizons", "bgtle", "neocpsat_fit", "neocp_obs", "pluto_mpec", "spacetrack_gp",
-         "tle_other"}
+         "statevec", "tle_other"}
 NUM = ["period_d", "a_km", "e", "incl_deg", "perigee_km", "apogee_km"]
 
 

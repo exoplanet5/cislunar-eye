@@ -11,7 +11,7 @@ Checks:
   se      SE frame: every SE-L1/L2 target within 1e6 km of its marker over the window
   em_l    EM-L1..L5 co-move with the Moon: fixed in the EM frame; on the Moon line / at +-60 deg in ECI
   lunar   lunar orbiters within 20,000 km of the Moon (and above its surface) over the window
-  dro     DRO-A within 1e5 km of the Moon in the EM frame (with its Bill Gray cross-check from build/states)
+  dro     EM_DRO targets (DRO-A, DRO-B) 2e4-1e5 km from the Moon in the EM frame (DRO-A failing is an error)
   regime  geocentric range against each drawn target's regime over the window
   gp      Space-Track GP vs Horizons (cle.adapters.gp.check on cached Horizons vectors; no network)
   dots    astrometry tracklet dots (a chunk payload's "tracklets") against the target's track at the obs epochs
@@ -263,8 +263,8 @@ def main():
                     "status": status(r.max() < DRO_MAX_KM and r.min() > 2e4, warn=cid != "dro-a")}
     out["dro"] = dro
     if dro.get("dro-a", {}).get("status") == "FAIL":
-        out["dro"]["note"] = ("data source, not integration: AM6 integrates the newest Space-Track GP state; the Bill Gray "
-                              "fit extrapolated the same way stays inside the DRO band")
+        out["dro"]["note"] = (f"check the data source first ({', '.join(dro['dro-a']['src'])}): the GP-state track of 2026-10 "
+                              "left the DRO band while Bill Gray's fit and the hand-supplied state vector (AM14) stay in it")
 
     # --- regime: geocentric range over the window
     reg = {}

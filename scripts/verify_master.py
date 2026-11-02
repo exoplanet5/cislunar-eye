@@ -6,6 +6,7 @@
                  to 2026-10-21; the radius must lie between perigee and apogee (5 % margin)
   bgtle          the Bill Gray file must exist in ~/tles
   neocpsat_fit   the fit page / elements file must exist
+  statevec       the state vector file must exist
   pluto_mpec     the pseudo-MPEC must be cached under work/cache/neocp/mpecs/ or ../neocpsat/mpecs/
   SATCAT         every real NORAD number is looked up once on Space-Track (space-track skill CLI);
                  a DECAY date before now on a non-terminal object is an error
@@ -98,6 +99,9 @@ def main():
         elif kind == "bgtle":
             if not (TLES / ref).exists():
                 verdict, detail = "FAIL", f"~/tles/{ref} missing"
+        elif kind == "statevec":
+            if not (ROOT / ref).exists():
+                verdict, detail = "FAIL", f"state vector file {ref} missing"
         elif kind == "neocpsat_fit":
             path = ref.split("@")[0]
             cands = [ROOT / path, NEOCPSAT / path.removeprefix("../neocpsat/"), (ROOT / path).resolve()]

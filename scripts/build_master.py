@@ -11,6 +11,8 @@ Outputs  catalog/master_list.tsv, catalog/master_list.json, catalog/TARGETS.md
 
 Space-Track GP primaries are graded by age: <= 30 d covers the window; 30-120 d still drives the GP
 adapter but is marked covers_window 'stale-gp' with a "stale: ..." caveat; older sets are unusable.
+A hand-supplied state vector (`statevec:` in manual.tsv, propagated with ../hpop) ranks right after Horizons at
+any age: it is replaced or removed by hand; beyond 30 d from its epoch its caveat says "stale: ...".
 
 Linking: rows are joined on NORAD, Horizons ID, COSPAR, NEOCP temporary designation and
 normalised name, in that order. A join is refused when the two groups hold different real
@@ -47,6 +49,7 @@ W0, W1 = NOW - timedelta(days=HALF_WINDOW_D), NOW + timedelta(days=HALF_WINDOW_D
 RECENT_END = NOW - timedelta(days=365)  # ended within a year: kept for replay (tier 2)
 STALE_DAYS = 365
 GP_FRESH_DAYS, GP_OK_DAYS = 30, 120    # GP age: <= 30 d 'window', <= 120 d 'stale-gp', older unusable
+STATEVEC_FRESH_DAYS = 30               # a state vector further from now than this gets a "stale: ..." caveat
 FIT_OK_DAYS = 30                       # a find_orb fit / obs arc ending this recently still counts
 NEAR_KM = 1.0e7                        # "near Earth" during the window
 P_THRESHOLD_D = 2.4
@@ -236,6 +239,9 @@ def judge(e, from_horizons_src):
             full = s <= W0 and t >= W1
             return 2, ("window" if full else f"partial {s}..{t}"), ""
         return None, "outside", ""
+    if k == "statevec":
+        ep = s or t
+        return (1.5, "window", f"state {ep}") if ep else (None, "unknown", "no epoch")
     if k == "spacetrack_gp":
         ep = s or t
         age = abs((ep - NOW).days) if ep else None
@@ -481,6 +487,10 @@ def build():
                                else f"Space-Track GP {e0['start']} (age {age} d)")
                 if regime.startswith("EM_"):
                     caveats.append("CR3BP orbit: Earth+Moon+Sun trajectory fitted to recent GP sets, not SDP4")
+            elif k0 == "statevec":
+                age = abs((NOW - e0["start"]).days)
+                caveats.append(f"{'stale: ' if age > STATEVEC_FRESH_DAYS else ''}state vector of {e0['start']} "
+                               f"(age {age} d) propagated with HPOP")
             elif k0 in ("neocpsat_fit", "pluto_mpec"):
                 caveats.append(f"find_orb fit, arc to {end_of(e0)}; extrapolated beyond it")
             elif k0 == "horizons" and e0["end"] and e0["end"] < W1:
@@ -608,7 +618,7 @@ def write_outputs(objs, conflicts, weak, olog, sweep=None):
 
     def ephcell(o):
         p = o["primary_ephem"]
-        p = re.sub(r"\.\./neocpsat/mpecs/|https://www\.projectpluto\.com/neocp2/mpecs/|work/cache/\S*/", "", p)
+        p = re.sub(r"\.\./neocpsat/mpecs/|https://www\.projectpluto\.com/neocp2/mpecs/|work/cache/\S*/|catalog/statevec/", "", p)
         return p[:70]
 
     def orbcell(o):
@@ -675,9 +685,9 @@ def write_outputs(objs, conflicts, weak, olog, sweep=None):
     else:
         L += ["No `catalog/verify_report.tsv`: run `scripts/verify_master.py` and the merge again.", ""]
     L += ["## Caveats the viewer must carry", "",
-          "- **DRO-A / DRO-B** have only Space-Track GP sets. A DRO is not a Kepler orbit (the GP period swings "
-          "between 26 and 47 d from fit to fit), so SDP4 over weeks is wrong: convert the GP state at its epoch "
-          "and integrate with Earth + Moon + Sun.",
+          "- **DRO-A / DRO-B** are drawn from hand-supplied state vectors (`catalog/statevec/`, rows in "
+          "`catalog/sources/manual.tsv`) propagated with ../hpop. Their Space-Track GP sets are a poor guide: a DRO is "
+          "not a Kepler orbit (the GP period swings between 26 and 47 d from fit to fit).",
           "- **Chang'e-6 orbiter, Tiandu-1** manoeuvre; each neocpsat fit is coherent for about two weeks.",
           "- **Spektr-RG** has only neocpsat heliocentric fits; it station-keeps, so the fit drifts after the next burn.",
           "- **Space-Track GP tracks** are for this local page only (redistribution terms).",
