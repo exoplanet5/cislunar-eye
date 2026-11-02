@@ -14,7 +14,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { cp, mkdir, readdir, rm, writeFile, copyFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { inflateSync, deflateSync, crc32 } from 'node:zlib';
 import path from 'node:path';
@@ -26,6 +26,9 @@ const screens = path.join(root, 'build/screens'), diffDir = path.join(root, 'bui
 const baselines = path.resolve(root, args.includes('--baselines') ? opt('--baselines') : 'build/screens_baseline');
 const NOW = '2026-10-21T13:00:00Z';            // epoch of every screenshot (the fixture's now)
 const WALL = '2026-10-22T13:00:00Z';           // pinned wall clock: inside the window (LIVE available); re-pinned before each screenshot
+// The real build's own epoch (dist/data/manifest.js now_utc; make daily moves it), so the dist checks sit mid-window like the
+// fixture's; its wall clock is pinned 24 h later, as WALL is to NOW.
+function buildNow() { const f = path.join(root, 'dist/data/manifest.js'), m = existsSync(f) && /"now_utc":"([^"]+)"/.exec(readFileSync(f, 'utf8')); return m ? m[1] : NOW; }
 const MPC_LIST = 'https://www.minorplanetcenter.net/Extended_Files/neocp.json', HELPER = 'http://127.0.0.1:8765';
 const MPC_JSON = readFileSync(path.join(root, 'tests/fixtures/request/mpc_neocp.json'), 'utf8');
 const CANNED = path.join(root, 'build/fixture/request/C46FX01.json');                 // npm run fixture: the helper's answer for C46FX01
@@ -150,12 +153,12 @@ function serve(route, net) {
   requests.push(url); return route.abort();
 }
 
-async function open(file, query = '', viewport = { width: 1440, height: 900 }, reducedMotion = 'reduce', { helper = 'online' } = {}) {
+async function open(file, query = '', viewport = { width: 1440, height: 900 }, reducedMotion = 'reduce', { helper = 'online', wall = WALL } = {}) {
   const context = await browser.newContext({ viewport, reducedMotion });
   const net = { helper, log: [], query: [], refused: [] };
   await context.route(/^https?:/, route => serve(route, net));
   const page = await context.newPage();
-  page.net = net;
+  page.net = net; page.wall = wall;
   page.on('pageerror', error => errors.push(`${path.basename(file)}: ${error.message}`));
   page.on('console', message => {
     if (message.type() !== 'error') return;
@@ -164,7 +167,7 @@ async function open(file, query = '', viewport = { width: 1440, height: 900 }, r
     if (net.helper === 'offline' && at.startsWith(`${HELPER}/api/`) && /net::ERR_CONNECTION_REFUSED/.test(message.text())) { net.refused.push(at); return; }
     errors.push(`${path.basename(file)}: ${message.text()}${at ? ` (${at})` : ''}`);
   });
-  await page.clock.setSystemTime(WALL);                    // Date.now keeps advancing from WALL; performance.now is untouched
+  await page.clock.setSystemTime(wall);                    // Date.now keeps advancing from the pinned wall; performance.now is untouched
   await page.goto(pathToFileURL(file).href + query);
   await page.waitForFunction(() => window.__cle?.ready, null, { timeout: 20000 });
   await settle(page);
@@ -181,7 +184,7 @@ const shot = async (page, name, locator = null) => {
   await settle(page);
   const clock = await ev(page, () => ({ live: window.__cle.clock.live, url: location.search }));
   assert.ok(!clock.live && /[?&]t=/.test(clock.url), `${name}: screenshots need a pinned ?t= (LIVE ${clock.live}, ${clock.url})`);
-  await page.clock.setSystemTime(WALL);                                               // Δ now and the MPC read time: the same at every shot
+  await page.clock.setSystemTime(page.wall);                                          // Δ now and the MPC read time: the same at every shot
   await ev(page, () => window.__cle.setTime(window.__cle.clock.t));                   // repaint the clock UI at the pinned wall clock
   await settle(page);
   const file = path.join(screens, `${name}.png`);
@@ -256,6 +259,20 @@ const moonTrailSpan = page => ev(page, () => {
   let gap = a.length ? 360 - (a.at(-1) - a[0]) : 360;
   for (let i = 1; i < a.length; i++) gap = Math.max(gap, a[i] - a[i - 1]);
   return { span: 360 - gap, past: past / 86400, future: future / 86400 };
+});
+
+// Screen width (CSS px) of the drawn Moon trail and its share of the scene: the opening view frames the lunar orbit (V1,
+// about 60 % of the scene width) at any phase, while the Moon itself is foreshortened to ~sin 30° of its distance near quarter.
+const moonOrbitWidth = page => ev(page, () => {
+  const c = window.__cle, t = c.trails, b = t.batches.earth, { start, time, info } = b.buf, n = b.geometry.instanceCount, now = t.material.uniforms.uNow.value;
+  const past = t.data[(t.width + t.moonIndex) * 4], future = t.data[(t.width + t.moonIndex) * 4 + 1], el = document.getElementById('scene');
+  const v = c.bodies.earth.position.clone(); let lo = Infinity, hi = -Infinity;
+  b.mesh.updateMatrixWorld(true);
+  for (let i = 0; i < n; i++) if (info[i * 2] === t.moonIndex && time[i * 2 + 1] >= now - past && time[i * 2] <= now + future) {
+    v.set(start[i * 3], start[i * 3 + 1], start[i * 3 + 2]).applyMatrix4(b.mesh.matrixWorld).project(c.camera);
+    lo = Math.min(lo, v.x); hi = Math.max(hi, v.x);
+  }
+  return { px: (hi - lo) * el.clientWidth / 2, frac: (hi - lo) / 2 };
 });
 
 // Frame geometry, all in km in the active display frame.
@@ -1067,11 +1084,23 @@ async function fixes(page) {
   await ev(page, () => { const c = window.__cle; c.select(null); c.focusOn('earth'); c.preset('wide'); }); await settle(page);
 }
 
+// Catalog tracklets in the real build's chunk payloads (dist/data/targets-*.js): {id: [tracklets, stations]}. Which targets
+// have astrometry inside the window depends on the window make daily chose, so the dist checks compare with the data.
+function chunkTracklets() {
+  const dir = path.join(root, 'dist/data'), out = {};
+  for (const f of existsSync(dir) ? readdirSync(dir).filter(n => /^targets-.*\.js$/.test(n)) : []) {
+    const js = readFileSync(path.join(dir, f), 'utf8'), p = JSON.parse(js.slice(js.indexOf(',') + 1, js.lastIndexOf(')')));
+    for (const [id, t] of Object.entries(p.targets)) if (t.tracklets?.length) out[id] = [t.tracklets.length, new Set(t.tracklets.map(k => k.stn)).size];
+  }
+  return out;
+}
+
 // Real data (dist/index.html): the build's own epoch; one screenshot per view of the integration checklist.
 async function dist() {
   const file = path.join(root, 'dist/index.html');
   if (!existsSync(file)) { console.log('skip dist: dist/index.html missing'); return; }
-  const t0 = Date.now(), page = await open(file, `?t=${NOW}`), loadMs = Date.now() - t0;
+  const NOW = buildNow(), wall = new Date(Date.parse(NOW) + 24 * 3600e3).toISOString();   // shadows the fixture's epoch below
+  const t0 = Date.now(), page = await open(file, `?t=${NOW}`, undefined, undefined, { wall }), loadMs = Date.now() - t0;
   const timing = await ev(page, () => { const n = performance.getEntriesByType?.('navigation')?.[0]; return { dcl: n?.domContentLoadedEventEnd ?? NaN, load: n?.loadEventEnd ?? NaN }; });   // page.clock hides the entries
   const info = await ev(page, () => {
     const c = window.__cle, w = c.world, by = {};
@@ -1129,7 +1158,8 @@ async function dist() {
   // Opening view (V1 + V5 + C1 on the real catalog), then the L1–L2 preset
   let v = await view(page);
   if (feature('V1 opening view (dist)', v.earthPx > 4, `Earth ${v.earthPx.toFixed(2)} px`)) {
-    assert.ok(v.chevrons.includes('SE-L1') && v.chevrons.includes('SE-L2') && v.moonPx > 150 && v.em.every(a => a === 0), JSON.stringify({ chevrons: v.chevrons, moonPx: v.moonPx, em: v.em }));
+    const mo = await moonOrbitWidth(page);                                  // the real build's epoch: any lunar phase
+    assert.ok(v.chevrons.includes('SE-L1') && v.chevrons.includes('SE-L2') && mo.frac > .45 && v.em.every(a => a === 0), JSON.stringify({ chevrons: v.chevrons, moonPx: v.moonPx, orbit: mo, em: v.em }));
     // L-point chevrons: the count of shown targets of that regime off screen and the range in Mkm (LD only below 1 Mkm)
     const ct = await ev(page, () => Object.fromEntries([...document.querySelectorAll('.edge-marker')].filter(e => !e.hidden).map(e => [e.dataset.id, e.textContent])));
     assert.ok(/^SE-L1 · [1-9]\d* · 1\.\d\d Mkm$/.test(ct['SE-L1']) && /^SE-L2 · [1-9]\d* · 1\.\d\d Mkm$/.test(ct['SE-L2']), JSON.stringify(ct));
@@ -1142,7 +1172,7 @@ async function dist() {
     // the short mouse hint between 981 and 1600 px
     const hint = await ev(page, () => ({ long: getComputedStyle(document.querySelector('.hint-long')).display, short: getComputedStyle(document.querySelector('.hint-short')).display, text: document.querySelector('.hint-short').textContent }));
     assert.ok(hint.long === 'none' && hint.short !== 'none', JSON.stringify(hint));
-    ok('dist opening view', `Earth ${v.earthPx.toFixed(1)} px, Moon ${v.moonPx.toFixed(0)} px out (trail ${ms.span.toFixed(0)}°), ${v.labels.length} labels, EM glyphs hidden, chevrons "${ct['SE-L1']}", "${ct['SE-L2']}"; beads ${bd.shown}/${bd.total} in their trail windows, ${Object.keys(bd.out).length} targets with beads on screen; hint "${hint.text}"`);
+    ok('dist opening view', `Earth ${v.earthPx.toFixed(1)} px, Moon ${v.moonPx.toFixed(0)} px out, lunar orbit ${mo.px.toFixed(0)} px wide (${(mo.frac * 100).toFixed(0)} % of the scene; trail ${ms.span.toFixed(0)}°), ${v.labels.length} labels, EM glyphs hidden, chevrons "${ct['SE-L1']}", "${ct['SE-L2']}"; beads ${bd.shown}/${bd.total} in their trail windows, ${Object.keys(bd.out).length} targets with beads on screen; hint "${hint.text}"`);
   }
   await dashCheck(page, ' (dist)', 20);
   let cc = await chevronClash(page);
@@ -1196,8 +1226,15 @@ async function dist() {
 
   // Hover a HEO target in the Earth–Moon preset (V2): tooltip, hover ring, trail emphasis through the pointer
   await ev(page, () => { const c = window.__cle; c.select(null); c.setFrame('se'); c.focusOn('earth'); c.preset('em'); }); await settle(page);
-  const heo = await ev(page, () => { const c = window.__cle, W = c.world; return (W.byId.get('vela-5a')?.screen ? 'vela-5a' : W.targets.find(T => T.cat.regime === 'CISLUNAR_HEO' && c.isVisible(T) && T.screen)?.id) || null; });
-  assert.ok(heo, 'a cislunar HEO target on screen');
+  // Vela 5A, or another visible cislunar HEO target, with no other marker within 16 px (the pick radius is 12 px), so the
+  // pointer can only mean it at whatever epoch the real build has
+  const heo = await ev(page, () => {
+    const c = window.__cle, W = c.world, shown = W.targets.filter(T => c.isVisible(T) && T.screen);
+    const clear = T => shown.every(U => U === T || Math.hypot(U.screen.x - T.screen.x, U.screen.y - T.screen.y) > 16);
+    const pool = [W.byId.get('vela-5a'), ...shown.filter(T => T.cat.regime === 'CISLUNAR_HEO')];
+    return pool.find(T => T && c.isVisible(T) && T.screen && clear(T))?.id || null;
+  });
+  assert.ok(heo, 'a cislunar HEO target on screen, clear of other markers');
   const idle = await texel(page, heo), box = await canvasBox(page), at = await ev(page, id => window.__cle.screenOf(id), heo);
   await page.mouse.move(box.x + at.x + 3, box.y + at.y - 2); await settle(page);
   const hv = await ev(page, () => ({ hovered: window.__cle.state.hovered, tip: document.getElementById('tooltip').textContent, hidden: document.getElementById('tooltip').hidden }));
@@ -1272,19 +1309,21 @@ async function dist() {
   await page.keyboard.press('Escape'); await settle(page);
   await ev(page, () => { const c = window.__cle; c.select(null); c.focusOn('earth'); }); await settle(page);
 
-  // Catalog tracklets, now in the chunk payloads (no neocp.js): the identified targets with astrometry, FH-013 S2 the
-  // one with the most; selected, every bead of it shows, with its station chips.
+  // Catalog tracklets, now in the chunk payloads (no neocp.js): the identified targets with astrometry in this window, as the
+  // data has them; the one with the most, selected, shows every bead, with a station chip per station.
   const neo = await ev(page, () => { const c = window.__cle, ids = c.tracklets.items.reduce((m, x) => m.set(x.id, (m.get(x.id) || 0) + x.n), new Map());
     const id = [...ids.entries()].sort((a, b) => b[1] - a[1]).find(([i]) => c.world.byId.get(i)?.track)?.[0];
     c.setFrame('eci'); c.select(id); c.focusOn(id);
     return { id, dots: ids.get(id), items: c.tracklets.items.filter(x => x.id === id).length, with: [...ids.keys()].sort(), sources: [...new Set(c.tracklets.items.map(x => c.world.byId.get(x.id)?.source))] }; });
   await settle(page); await page.waitForTimeout(200);
-  assert.deepEqual(neo.with, ['falcon-heavy-013-stage-2', 'multijunk', 'spektr-rg', 'tiandu-1'], 'catalog targets with tracklets');
-  assert.ok(neo.id === 'falcon-heavy-013-stage-2' && neo.items === 47 && neo.dots > 0 && neo.sources.join() === 'catalog', JSON.stringify(neo));
+  const data = chunkTracklets(), busiest = Object.entries(data).sort((a, b) => b[1][0] - a[1][0])[0];
+  assert.ok(busiest, 'the real build has catalog tracklets in its chunk payloads');
+  assert.deepEqual(neo.with, Object.keys(data).sort(), 'catalog targets with tracklets');
+  assert.ok(neo.id === busiest[0] && neo.items === busiest[1][0] && neo.dots > 0 && neo.sources.join() === 'catalog', JSON.stringify({ neo, busiest }));
   const neoShown = await ev(page, id => { const t = window.__cle.tracklets, L = t.layers.find(x => x.id === id), tk = t.by.get(id).tk; return L.g.visible ? tk.slice(...L.shown).reduce((m, x) => m + x.d1 - x.d0, 0) : 0; }, neo.id);
   assert.equal(neoShown, neo.dots, 'a selected target shows every bead (its trail is the whole window)');
   const fhChips = await ev(page, () => document.querySelectorAll('#readout .stations .stn[data-station]').length);
-  assert.ok(fhChips >= 30, `${fhChips} station chips`);
+  assert.equal(fhChips, busiest[1][1], `${fhChips} station chips for ${busiest[1][1]} stations`);
   ok('catalog tracklets', `${neo.with.join(', ')}; ${neo.id}: ${neo.items} tracklets, ${neo.dots} beads all shown when selected, ${fhChips} station chips`);
   await shot(page, 'dist-tracklets');
 
@@ -1310,7 +1349,7 @@ async function dist() {
   await page.context().close();
 
   // Phone
-  const phone = await open(file, `?t=${NOW}`, { width: 390, height: 844 });
+  const phone = await open(file, `?t=${NOW}`, { width: 390, height: 844 }, undefined, { wall });
   const ph = await ev(phone, () => ({ sw: document.documentElement.scrollWidth, canvas: document.querySelector('#scene canvas').getBoundingClientRect().width, earthPx: window.__cle.state.earthPx, labels: window.__cle.labelsShown().length }));
   assert.ok(ph.sw <= 390 && ph.canvas >= 380, JSON.stringify(ph));
   ok('dist phone layout', JSON.stringify(ph));

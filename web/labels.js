@@ -50,9 +50,12 @@ export class Labels {
       if (it.el.hidden) it.el.hidden = false;
       it.size ||= [it.el.offsetWidth, it.el.offsetHeight];
       const [width, height] = it.size;
-      // always-on labels (Earth, Moon, the frame's L points, selection) get a second ring before they are forced over markers
+      // always-on labels (Earth, Moon, the frame's L points, selection) get a second and a third ring (clear of a ~110 px
+      // cluster such as Earth's HEO swarm in the L1–L2 view) before they are forced over markers
       const r = c.r || 0, k = r * Math.SQRT1_2, near = [[9 + k, -14 - k], [9 + k, 4 + k], [-width - 9 - k, -14 - k], [-width - 9 - k, 4 + k]];
-      const offsets = c.always ? [...near, [9 + k, -28 - k], [9 + k, 18 + k], [-width - 9 - k, -28 - k], [-width - 9 - k, 18 + k], [-width / 2, -30 - r], [-width / 2, 20 + r]] : near;
+      const offsets = c.always ? [...near, [9 + k, -28 - k], [9 + k, 18 + k], [-width - 9 - k, -28 - k], [-width - 9 - k, 18 + k], [-width / 2, -30 - r], [-width / 2, 20 + r],
+        [-width / 2, -46 - r], [-width / 2, 36 + r], [24 + k, -44 - k], [24 + k, 34 + k], [-width - 24 - k, -44 - k], [-width - 24 - k, 34 + k],
+        [-width / 2, -62 - r], [-width / 2, 52 + r]] : near;
       let box = null;
       for (const [dx, dy] of offsets) {
         const b = { x: Math.max(4, Math.min(w - width - 4, c.x + dx)), y: c.y + dy, width, height };
