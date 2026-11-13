@@ -208,14 +208,16 @@ class PoolTest(unittest.TestCase):
             self.assertEqual({f.name for f in d.iterdir()}, fo.KEEP, d.name)       # scratch runs: no side files
         self.assertTrue((fit.dir / "total.json").exists() and (fit.sigma_dir / "total.json").exists())
         print(f"\n  daily(): {len(chunks)} one-day chunks + end leg, 1 worker {t_seq:.1f} s, 8 workers {t_par:.1f} s")
-        with mock.patch.object(fo, "STAMP", "v"):            # verify: 3 legs and the rebuild in the pool
+        # verify: 3 legs and the rebuild in the pool. tol < 0 forces the rebuild: Find_Orb 2026 Mar 01 drifted > 1 km
+        # on this table, the 2026 Oct 21 build 0.26 km (under verify's default 1 km, so no rebuild by itself).
+        with mock.patch.object(fo, "STAMP", "v"):
             t = time.time()
-            fit.verify(self.ctx, self.a, self.b, WIN.now_s)
+            fit.verify(self.ctx, self.a, self.b, WIN.now_s, tol=-1.0)
             t_ver = time.time() - t
         self.assertEqual(fit.mode, "fo_daily")
         legs = fit.consistency["fo_table_vs_one_leg_km"]
         self.assertEqual(len(legs), 3)
-        self.assertGreater(max(legs.values()), 1.0)
+        self.assertLess(max(legs.values()), 50.0)
         for k in range(3):
             self.assertEqual(rc(self.tmp / f"v/t8n_l{k}_E0"), 0)
         np.testing.assert_array_equal(fit.x, seq[1])

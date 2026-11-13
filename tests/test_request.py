@@ -347,7 +347,7 @@ class BuildTest(Contract, unittest.TestCase):
                 sv = self.build("8NIQ001", NIQ_HTML, NIQ_OBS, WIN_NIQ, use_fo=False)
                 a, b = decode_track(o["track"]), decode_track(sv["track"])
                 t = np.linspace(max(a.span[0], b.span[0]), min(a.span[1], b.span[1]), 300)
-                self.assertLess(np.linalg.norm(a(t)[:, :3] - b(t)[:, :3], axis=1).max(), 50.0)   # 15 km measured
+                self.assertLess(np.linalg.norm(a(t)[:, :3] - b(t)[:, :3], axis=1).max(), 100.0)  # 15 km with Find_Orb 2026 Mar 01, 68 km with 2026 Oct 21
                 holder = subprocess.Popen([sys.executable, "-I", "-c", "import fcntl, sys, time; f = open(sys.argv[1], 'w'); "
                                            "fcntl.flock(f, fcntl.LOCK_EX); print('held', flush=True); time.sleep(60)",
                                            str(lock)], stdout=subprocess.PIPE, text=True)

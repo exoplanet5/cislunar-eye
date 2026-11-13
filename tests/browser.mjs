@@ -233,7 +233,9 @@ const chevronsOverMarkers = page => ev(page, () => {
   return out;
 });
 // Tracklet beads drawn on screen (inside each group's draw range), per target: on screen, and how many of those belong to a
-// target whose marker is off screen.
+// target that is off screen: its marker is, and so is its own trail position at the epoch of every drawn tracklet. A fast
+// outbound target (ESCAPADE Gold two days after its 2026-11-09 Earth flyby) has left the view while the drawn trail its
+// beads sit on still crosses it.
 const beadsOnScreen = page => ev(page, () => {
   const c = window.__cle, el = document.getElementById('scene'), w = el.clientWidth, h = el.clientHeight, out = {};
   c.camera.updateMatrixWorld();
@@ -245,9 +247,9 @@ const beadsOnScreen = page => ev(page, () => {
       v.fromBufferAttribute(pos, i); L.g.localToWorld(v); v.project(c.camera);
       if (v.z < 1 && Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1) on++;
     }
-    if (on) out[L.id] = { on, markerOn: !!T.screen };
+    if (on) out[L.id] = { on, markerOn: !!T.screen, trailOn: tk.slice(L.shown[0], L.shown[1]).some(k => !!c.screenAt(L.id, k.t0)) };
   }
-  return { out, offTarget: Object.entries(out).filter(([, x]) => !x.markerOn).map(([id, x]) => `${id}:${x.on}`), shown: c.tracklets.shownCount, total: c.tracklets.dotCount };
+  return { out, offTarget: Object.entries(out).filter(([, x]) => !x.markerOn && !x.trailOn).map(([id, x]) => `${id}:${x.on}`), shown: c.tracklets.shownCount, total: c.tracklets.dotCount };
 });
 // Angular span (deg) about Earth of the Moon trail as drawn now (instances inside its texel window), in the scene's
 // horizontal plane (y up = the SE/ECI frame normal; the lunar orbit is within 5° of the ecliptic).
@@ -1090,7 +1092,7 @@ function chunkTracklets() {
   const dir = path.join(root, 'dist/data'), out = {};
   for (const f of existsSync(dir) ? readdirSync(dir).filter(n => /^targets-.*\.js$/.test(n)) : []) {
     const js = readFileSync(path.join(dir, f), 'utf8'), p = JSON.parse(js.slice(js.indexOf(',') + 1, js.lastIndexOf(')')));
-    for (const [id, t] of Object.entries(p.targets)) if (t.tracklets?.length) out[id] = [t.tracklets.length, new Set(t.tracklets.map(k => k.stn)).size];
+    for (const [id, t] of Object.entries(p.targets)) if (t.tracklets?.length) out[id] = [t.tracklets.length, new Set(t.tracklets.map(k => k.stn)).size, t.tracklets.reduce((m, k) => m + (k.n ?? k.t_ms.length), 0)];
   }
   return out;
 }
@@ -1316,7 +1318,7 @@ async function dist() {
     c.setFrame('eci'); c.select(id); c.focusOn(id);
     return { id, dots: ids.get(id), items: c.tracklets.items.filter(x => x.id === id).length, with: [...ids.keys()].sort(), sources: [...new Set(c.tracklets.items.map(x => c.world.byId.get(x.id)?.source))] }; });
   await settle(page); await page.waitForTimeout(200);
-  const data = chunkTracklets(), busiest = Object.entries(data).sort((a, b) => b[1][0] - a[1][0])[0];
+  const data = chunkTracklets(), busiest = Object.entries(data).sort((a, b) => b[1][2] - a[1][2])[0];     // most beads, as the page picks
   assert.ok(busiest, 'the real build has catalog tracklets in its chunk payloads');
   assert.deepEqual(neo.with, Object.keys(data).sort(), 'catalog targets with tracklets');
   assert.ok(neo.id === busiest[0] && neo.items === busiest[1][0] && neo.dots > 0 && neo.sources.join() === 'catalog', JSON.stringify({ neo, busiest }));
