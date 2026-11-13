@@ -39,6 +39,15 @@
   - **Regime.** Both tracks are retrograde loops 62 000–90 000 km from the Moon, so the two `overrides.tsv` rows now say
     `EM_DRO`. They had said `EM_OTHER` because of the GP-fitted tracks (13 700–50 800 km, "not a DRO"), which these
     vectors supersede. The Space-Track GP stays as the secondary ephemeris. AM6 is kept for EM_* objects that have only a GP.
+  - **2026-11-13: Chang'e 3 CZ-3B third stage (2013-070B) added the same way.** `catalog/statevec/2013-070B.txt` is the
+    epoch state (2026 Nov 13.0 TT = 2026-11-12T23:58:50.816 UTC, geocentric J2000 taken as ICRF) of the local Find_Orb fit
+    `../Change3/mpecs/2013-070B_2026-11-13.html` (59 of 64 positions, 2026-11-10..13, after its recovery as NEOCP 6L91321 =
+    C46T5A1 = A11JGmd). Its `manual.tsv` row also carries the fit's elements and the three NEOCP designations as aliases.
+    The hpop track is within 141 km of Find_Orb's own ephemeris (`../Change3/tle/13070b26_ephem.txt`) to 2026-11-28,
+    and `cle.nbody` from the same state gives the same offset. The difference is Find_Orb's: with perturbers limited to
+    Sun/Earth/Moon its heliocentric integration leaves out the planets' pull on the object while the Earth's DE440
+    position includes it, a spurious acceleration of about 2e-10 km/s² (Venus at 0.31 AU, Jupiter), four times the
+    stage's radiation pressure. The earlier source was the Space-Track GP of 2026-10-13.
 
 ## Amendments of 2026-11-01 (your decisions of the redesign; these override the body and, where they conflict, the amendments of 2026-10-21)
 

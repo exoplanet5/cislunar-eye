@@ -360,6 +360,13 @@ only by an explicit `make install-launchd` (copy to `~/Library/LaunchAgents` + `
   caveat says "stale" once the vector is more than 30 d from now. The earlier GP-fitted tracks put DRO-A 13,700–50,800 km
   from the Moon ("lunar-bound, not a DRO") and were 105,000 km off the new vector at 2026-10-25. That came from SDP4
   mean elements fitted to a DRO, which are not a Kepler orbit. The GP stays as the secondary ephemeris.
+- **Chang'e 3 CZ-3B third stage (2013-070B) comes from the Find_Orb fit of 2026-11-13** (ARCHITECTURE AM14), not from
+  its Space-Track GP of 2026-10-13. `catalog/statevec/2013-070B.txt` is the fit's epoch state (2026 Nov 13.0 TT) from
+  `../Change3/mpecs/2013-070B_2026-11-13.html` (59 of 64 positions, 2026-11-10..13), propagated with `../hpop` (badge
+  **S**). The track is within 141 km of Find_Orb's own ephemeris to 2026-11-28. That offset is a Find_Orb model effect:
+  with only Sun/Earth/Moon as perturbers it omits the planets' pull on the object (about 2e-10 km/s², mostly Venus),
+  which hpop's geocentric integration does not need. Before 2026-11-10 the track is a backward propagation of a
+  3.4-day arc.
 - **ESCAPADE Blue/Gold** have finished their SE-L2 loiter and are on the return leg to the November 2026 Earth flyby;
   they are relabelled `EARTH_NEAR_HELIO` (group "Earth-return / near-Earth heliocentric") in `catalog/overrides.tsv`.
 - **Chang'e-6 orbiter** is listed but not drawn: it manoeuvres, its 2026-10-01 page is 4 observations over 23 minutes
