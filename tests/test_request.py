@@ -524,8 +524,8 @@ class ServeTest(Contract, unittest.TestCase):
         cls.server.server_close()
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def get(self, path, host=None, method="GET", headers=()):
-        c = HTTPConnection("127.0.0.1", self.port, timeout=60)
+    def get(self, path, host=None, method="GET", headers=(), port=None):
+        c = HTTPConnection("127.0.0.1", port or self.port, timeout=60)
         c.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
         c.putheader("Host", f"127.0.0.1:{self.port}" if host is None else host)
         for k, v in headers:
@@ -758,6 +758,29 @@ class ServeTest(Contract, unittest.TestCase):
             self.assertNotIn(b"OUTSIDE-SECRET", body)
             self.assertNotIn(b"hidden", body)
         self.assertEqual(self.get("/api/health", method="POST")[0], 405)
+
+    def test_lan_hosts_and_same_origin_page(self):
+        """--allow-host names (ops/server/helper.sh) pass the Host guard and their origin; index.html tells the page to
+        ask this helper (window.CLE_HELPER = '')."""
+        dist = self.tmp / "lan"
+        dist.mkdir(exist_ok=True)
+        (dist / "index.html").write_text("<!doctype html><html><head><title>x</title></head></html>")
+        srv = self.serve.Server(0, CTX, dist=dist, use_fo=False, hosts=["Mac-Studio.local", "192.168.50.194"],
+                                log=self.lines.append)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        get = lambda path, host, headers=(): self.get(path, host, headers=headers, port=srv.port)  # noqa: E731
+        try:
+            for host in (f"mac-studio.local:{srv.port}", f"192.168.50.194:{srv.port}", f"127.0.0.1:{srv.port}"):
+                status, _, body = get("/", host)
+                self.assertEqual(status, 200, host)
+                self.assertIn(b"<head><script>window.CLE_HELPER=''</script><title>", body)
+            self.assertEqual(get("/", f"192.168.50.195:{srv.port}")[0], 421)
+            lan = f"192.168.50.194:{srv.port}"
+            self.assertEqual(get("/api/health", lan, (("Origin", f"http://{lan}"),))[0], 200)
+            self.assertEqual(get("/api/health", lan, (("Origin", "http://192.168.50.195"),))[0], 403)
+        finally:
+            srv.shutdown()
+            srv.server_close()
 
 
 class FixtureShapeTest(unittest.TestCase):

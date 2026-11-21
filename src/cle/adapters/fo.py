@@ -37,6 +37,7 @@ import fcntl
 import hashlib
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -61,7 +62,7 @@ from cle.statetable import StateTable
 from cle.timeutil import iso
 
 ROOT = nbody.ROOT
-FO = Path("/Users/mickey/Desktop/billgray/local/bin/fo")
+FO = Path(os.environ.get("CLE_FO") or "/Users/mickey/Desktop/billgray/local/bin/fo")   # CLE_FO: ops/server/env.sh
 NEO = ROOT.parent / "neocpsat"
 CACHE = ROOT / "work/cache/fo"
 VERDICTS = CACHE / "verdicts.json"

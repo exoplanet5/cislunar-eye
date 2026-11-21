@@ -57,6 +57,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -74,10 +75,10 @@ HOME = Path.home()
 PROJECT = Path(__file__).resolve().parents[1]
 TLE_ROOT = HOME / "tles"
 TLE_LIST = TLE_ROOT / "tle_list.txt"
-HIGHARTSAT = HOME / "ciscluar" / "highartsat"
+HIGHARTSAT = PROJECT.parent / "highartsat"                  # ../highartsat next to the project
 BUILD_PY = HIGHARTSAT / "catalog" / "build.py"
 ORBITS_JSON = HIGHARTSAT / "catalog" / "data" / "orbits.json"
-GET_VECT = HOME / "Desktop" / "billgray" / "sat_code" / "get_vect"
+GET_VECT = Path(os.environ.get("CLE_GET_VECT") or HOME / "Desktop" / "billgray" / "sat_code" / "get_vect")
 DE_KERNEL = HOME / "JPLDE" / "de440s.bsp"
 CACHE = PROJECT / "work" / "cache" / "billgray"
 UPSTREAM = CACHE / "upstream"

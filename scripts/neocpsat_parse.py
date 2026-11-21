@@ -33,7 +33,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-NEOCPSAT = Path("/Users/mickey/ciscluar/neocpsat")
+NEOCPSAT = Path(__file__).resolve().parents[2] / "neocpsat"     # ../neocpsat next to the project
 AU_KM = 149597870.7
 TT_MINUS_UTC = 69.184
 MU_EARTH = 398600.4418  # km^3/s^2

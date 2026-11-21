@@ -66,6 +66,7 @@ import csv
 import fcntl
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -85,7 +86,7 @@ OUT_SRG = ROOT / "catalog" / "sources" / "neocpsat_spektr_rg_history.tsv"
 OUT_JSON = ROOT / "work" / "notes" / "neocpsat_extract_summary.json"
 FO_CACHE = ROOT / "work" / "cache" / "neocpsat_fo"
 FO_UNCONF = ROOT / "work" / "cache" / "neocpsat_fo_unconfirmed"
-FO_BIN = "/Users/mickey/Desktop/billgray/local/bin/fo"
+FO_BIN = os.environ.get("CLE_FO") or "/Users/mickey/Desktop/billgray/local/bin/fo"
 FO_LOCK = ROOT / "work" / "fo.lock"
 NOW = now("day")             # CLE_NOW floored to the day, else today (scripts/_now.py)
 P_CUT = 2.4

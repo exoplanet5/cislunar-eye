@@ -26,8 +26,8 @@ AGENTS  := com.cislunar-eye.daily
 LEGACY  := com.cislunar-eye.neocp
 
 .PHONY: now setup extract sweep catalog neocp-live update-horizons update-gp update-fits tles-status \
-        states export validate site build test test-browser sanity status open serve publish install-launchd uninstall-launchd \
-        prune prune-apply all daily
+        states export validate site build test fixture test-browser sanity status open serve publish install-launchd uninstall-launchd \
+        prune prune-apply all daily weekly
 
 now:
 	$(NOW)
@@ -96,6 +96,10 @@ test:
 	$(PY) -I -m unittest discover -s tests -p 'test_*.py'
 	test ! -f package.json || npm test
 
+fixture:                              # the browser tests' fixture page = npm run fixture + build:fixture (ops/server/setup.sh: once)
+	CLE_NOW=2026-10-21T13:00:00Z $(PY) -I tests/fixtures/make_fixture.py
+	$(NODE) scripts/build_site.mjs --data build/fixture/data --out build/fixture/index.html
+
 test-browser:                         # fixture page + dist/index.html from file://; screenshots -> build/screens/
 	$(NOW)
 	$(NODE) tests/browser.mjs --dist
@@ -138,6 +142,8 @@ uninstall-launchd:                    # unload the agents (and the legacy hourly
 	for a in $(AGENTS) $(LEGACY); do launchctl bootout gui/$$(id -u)/$$a 2>/dev/null; rm -f $(LAUNCHD)/$$a.plist; done
 
 all: states export validate site     # then: make test test-browser sanity
+
+weekly: neocp-live daily              # the LAN server's weekly job (ops/server/weekly.sh): NEOCP catalog source, then the full refresh
 
 daily: extract sweep catalog update-horizons update-gp tles-status update-fits states export validate site test sanity test-browser  # then prune (EFF-9), non-fatal
 	$(NOW)

@@ -12,6 +12,7 @@ switch jumps > 50 km); jump_km is kept either way. quality=fit.
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import subprocess
 import sys
@@ -31,7 +32,7 @@ from cle.timeutil import iso, parse_iso
 
 ROOT = nbody.ROOT
 TLES = Path.home() / "tles"
-GET_VECT = Path.home() / "Desktop/billgray/sat_code/get_vect"
+GET_VECT = Path(os.environ.get("CLE_GET_VECT") or Path.home() / "Desktop/billgray/sat_code/get_vect")
 TMP = ROOT / "work/cache/bgtle/tmp"
 SPLICE_KM = 50.0
 MJD0 = 2400000.5

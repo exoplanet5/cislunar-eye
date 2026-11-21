@@ -252,6 +252,9 @@ from Pages; its only request of its own is MPC's `neocp.json`. NEOCP lookups fro
 reader's own machine (`make serve` in a checkout; the helper admits the Pages origin), else the lookup says "helper
 offline". Refresh stays manual: `make daily` (or `make all`), then `make publish`.
 
+A LAN server can instead run the page and the helper around the clock with a weekly refresh
+(`ops/server/deploy.sh`, see [DEPLOY.md](DEPLOY.md)).
+
 ## Build
 
 Python is `~/.venvs/astro313/bin/python -I`; Node ≥ 20 with `npm ci` (esbuild, Playwright with system Chrome).
@@ -351,6 +354,11 @@ only by an explicit `make install-launchd` (copy to `~/Library/LaunchAgents` + `
 
 ## Known issues
 
+- **Open, deferred (2026-11-19): the LAN server's helper is reachable from the internet with no login.** The router
+  forwards a public domain to it (`ops/server/deploy.sh allow <names>`). Anyone can
+  use the page and start NEOCP fetches and find_orb fits, over plain HTTP, on the stdlib server. The chosen fix is
+  Cloudflare Tunnel + Cloudflare Access (email one-time-code login, free for a small team; no open port, HTTPS). It
+  also covers the GitHub Pages password question. See DEPLOY.md, "Access from outside the LAN".
 - **DRO-A and DRO-B come from hand-supplied state vectors, not from Space-Track** (ARCHITECTURE AM14). The files
   `catalog/statevec/DRO-A.txt` (2026-10-25T00:00Z) and `DRO-B.txt` (2026-10-12T00:00Z) use hpop's paste format (m, m/s,
   Earth-centred ICRF, UTC). They are propagated with `../hpop` (`src/cle/adapters/hpop.py`; badge **S**), backward and

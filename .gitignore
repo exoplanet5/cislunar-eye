@@ -5,3 +5,7 @@ node_modules/
 __pycache__/
 *.pyc
 .DS_Store
+
+# local deploy target credentials (never commit)
+local-server
+ops/server/local.env

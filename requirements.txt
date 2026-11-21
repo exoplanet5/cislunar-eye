@@ -1,0 +1,14 @@
+# Python packages the pipeline, the helper (scripts/serve.py) and ../hpop import; pinned to the dev venv
+# (~/.venvs/astro313, CPython 3.13). ops/server/setup.sh installs them into the server's venv.
+# beautifulsoup4 + lxml: ../neocpsat/pluto.py (scripts/neocp_live.py, scripts/extract_neocpsat.py). certifi: the CA bundle
+# the server points SSL_CERT_FILE at (ops/server/env.sh).
+numpy==2.4.2
+scipy==1.17.1
+skyfield==1.54
+jplephem==2.24
+sgp4==2.25
+astropy==7.2.0
+requests==2.32.5
+certifi==2026.1.4
+beautifulsoup4==4.14.3
+lxml==6.0.2

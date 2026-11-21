@@ -2,8 +2,10 @@
 """Local helper for the viewer (`make serve`): dist/ and the on-request NEOCP API on http://127.0.0.1:8765/.
 
     ~/.venvs/astro313/bin/python -I scripts/serve.py [--port 8765] [--dist dist] [--no-fo] [--allow-origin URL ...]
+                                                     [--bind ADDR --allow-host NAME ...]
 
-Binds 127.0.0.1 only (stdlib ThreadingHTTPServer). Static: / -> dist/index.html, /data/*.js and the other files under
+Binds 127.0.0.1 (stdlib ThreadingHTTPServer); a LAN server (ops/server/helper.sh) binds --bind 0.0.0.0 and names the
+host names / addresses its viewers type with --allow-host. Static: / -> dist/index.html, /data/*.js and the other files under
 dist/ with their content types; no directory listing, no dot files, nothing outside dist/. API (JSON):
 
   GET /api/health            {"ok": true, "service": "cislunar-eye", "api": 1, "fo": <find_orb binary present>, "now_utc"}
@@ -19,10 +21,10 @@ dist/ with their content types; no directory listing, no dot files, nothing outs
 
 Every response carries Access-Control-Allow-Origin: * and Cache-Control: no-store; OPTIONS preflights answer 204 with
 the allowed methods / headers and Access-Control-Allow-Private-Network: true (a file:// or public page may call the
-loopback helper). A Host header other than 127.0.0.1:<port> / localhost:<port> gets 421 (DNS-rebinding guard). /api/
+loopback helper). A Host header other than 127.0.0.1:<port> / localhost:<port> / <--allow-host>:<port> gets 421 (DNS-rebinding guard). /api/
 requests (and their preflights) from a browser page must come from an allowed origin, else 403 bad_origin: the
 helper's own pages (same origin, no Origin header), file:// ("null"), any http(s) loopback server, the GitHub Pages
-site (PAGES_ORIGIN) and --allow-origin ones; a cross-site request without an Origin header (an <img> or <script> tag,
+site (PAGES_ORIGIN), http://<--allow-host>:<port> and --allow-origin ones; a cross-site request without an Origin header (an <img> or <script> tag,
 a no-cors fetch, a link) is refused by its Sec-Fetch-Site. Without these checks any web site open in the browser
 could make the helper fetch from projectpluto.com and MPC. (A sandboxed iframe also sends "null"; accepted for
 file://.) Answers are cached 10 min under (designation, t0, t1, the page's Created stamp, sha256 of the observations);
@@ -32,7 +34,8 @@ build. Builds run one at a time (a request waits up to 30 s for the build slot, 
 loaded once at start. A client that disconnects mid-build (the page's AbortController) costs nothing: the result is
 still cached. One log line per request on stdout, control characters escaped (the stdlib's own 400 / 414 / 501
 answers included). The port is refused when another program already accepts on 127.0.0.1:<port> (macOS would let
-SO_REUSEADDR bind it beside a *:<port> server).
+SO_REUSEADDR bind it beside a *:<port> server). index.html is sent with window.CLE_HELPER = '' (the page asks this
+helper, same origin, also when opened as http://<LAN host>:<port>/).
 """
 from __future__ import annotations
 
@@ -70,6 +73,7 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
 JSON = "application/json; charset=utf-8"
 GONE = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
 PAGES_ORIGIN = "https://exoplanet5.github.io"                     # make publish (README)
+SAME_ORIGIN = b"<head><script>window.CLE_HELPER=''</script>"       # web/ui/neocp.js helperBase: '' = this helper
 LOOPBACK = re.compile(r"^https?://(127\.0\.0\.1|localhost|\[::1\])(:\d{1,5})?$")
 CTRL = {c: f"\\x{c:02x}" for c in (*range(0x20), *range(0x7F, 0xA0))}   # as BaseHTTPRequestHandler.log_message
 
@@ -113,11 +117,14 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, port, ctx, *, dist=ROOT / "dist", cache_root=request.CACHE, runs=request.RUNS,
                  fetcher=request.fetch, summary=request.summary, use_fo=True, lock_timeout=request.LOCK_TIMEOUT_S,
-                 busy_wait_s=BUSY_WAIT_S, log=None, origins=()):
+                 busy_wait_s=BUSY_WAIT_S, log=None, origins=(), bind="127.0.0.1", hosts=()):
         if port_taken(port):              # SO_REUSEADDR (kept for quick restarts) would not catch a *:<port> server
             raise OSError(errno.EADDRINUSE, "address already in use by another program")
-        super().__init__(("127.0.0.1", port), Handler)
-        self.origins = {"null", PAGES_ORIGIN, *(o.strip().rstrip("/").lower() for o in origins)}
+        super().__init__((bind, port), Handler)
+        names = {"127.0.0.1", "localhost", *(h.strip().lower() for h in hosts if h.strip())}
+        self.hosts = {f"{h}:{self.port}" for h in names}
+        self.origins = {"null", PAGES_ORIGIN, *(f"http://{h}" for h in self.hosts),
+                        *(o.strip().rstrip("/").lower() for o in origins)}
         self.ctx, self.dist, self.cache_root, self.runs = ctx, Path(dist).resolve(), Path(cache_root), Path(runs)
         self.fetcher, self.summary, self.use_fo, self.lock_timeout = fetcher, summary, use_fo, lock_timeout
         self.busy_wait_s = busy_wait_s
@@ -175,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def host_ok(self) -> bool:
         host = (self.headers.get("Host") or "").strip().lower()
-        if host in (f"127.0.0.1:{self.server.port}", f"localhost:{self.server.port}"):
+        if host in self.server.hosts:
             return True
         self.note += f" bad_host: {host[:80]!r}"
         return False
@@ -333,6 +340,8 @@ class Handler(BaseHTTPRequestHandler):
             hint = " (make build)" if not parts else ""
             self.send(404, f"not found{hint}\n".encode(), "text/plain; charset=utf-8")
             return
+        if target == self.server.dist / "index.html":
+            body = body.replace(b"<head>", SAME_ORIGIN, 1)
         self.send(200, body, TYPES.get(target.suffix.lower(), "application/octet-stream"))
 
 
@@ -342,7 +351,10 @@ def stop(*_):
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--port", type=int, default=PORT, help="port on 127.0.0.1 (0: any free one)")
+    ap.add_argument("--port", type=int, default=PORT, help="port (0: any free one)")
+    ap.add_argument("--bind", default="127.0.0.1", help="listen address (0.0.0.0: every interface, a LAN server)")
+    ap.add_argument("--allow-host", action="append", default=[], metavar="NAME",
+                    help="another Host name / address the viewers use (besides 127.0.0.1 and localhost)")
     ap.add_argument("--dist", type=Path, default=ROOT / "dist", help="static root (default dist/)")
     ap.add_argument("--no-fo", action="store_true", help="never run find_orb: page state vector only")
     ap.add_argument("--allow-origin", action="append", default=[], metavar="URL",
@@ -351,12 +363,14 @@ def main(argv=None) -> int:
     from cle.context import Context
     ctx = Context()
     try:
-        server = Server(args.port, ctx, dist=args.dist, use_fo=not args.no_fo, origins=args.allow_origin)
+        server = Server(args.port, ctx, dist=args.dist, use_fo=not args.no_fo, origins=args.allow_origin,
+                        bind=args.bind, hosts=args.allow_host)
     except OSError as err:
-        print(f"serve.py: cannot listen on 127.0.0.1:{args.port}: {err}", file=sys.stderr)
+        print(f"serve.py: cannot listen on {args.bind}:{args.port}: {err}", file=sys.stderr)
         return 1
     have_fo = fo.FO.exists() and not args.no_fo
-    print(f"cislunar-eye helper: open http://127.0.0.1:{server.port}/  (find_orb {'on' if have_fo else 'off'}; "
+    lan = "".join(f" http://{h}:{server.port}/" for h in args.allow_host)
+    print(f"cislunar-eye helper: open http://127.0.0.1:{server.port}/{lan}  (find_orb {'on' if have_fo else 'off'}; "
           f"{'dist/index.html' if (server.dist / 'index.html').exists() else 'dist not built: make build'}; Ctrl-C stops)",
           flush=True)
     signal.signal(signal.SIGTERM, stop)                      # kill / launchd: stop like Ctrl-C
