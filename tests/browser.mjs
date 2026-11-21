@@ -1190,7 +1190,8 @@ async function dist() {
   await shot(page, 'dist-se-default');
   await fixes(page);
   let g = await geometry(page);
-  assert.ok(g.L[1][0] > 1.49e6 && Math.hypot(g.L[1][1], g.L[1][2]) < 1e-3);
+  // the real window's epoch: SE-L2 is 1.483 (perihelion) .. 1.533 Mkm (aphelion) from Earth over the year
+  assert.ok(g.L[1][0] > 1.475e6 && g.L[1][0] < 1.54e6 && Math.hypot(g.L[1][1], g.L[1][2]) < 1e-3, `SE-L2 ${g.L[1]}`);
   // Markers sit on their own trails: at an off-grid epoch, distance from each marker to its batched trail polyline
   const onTrail = await ev(page, t => {
     const c = window.__cle, w = c.world, RE = 6378.137, out = {};

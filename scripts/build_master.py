@@ -262,11 +262,12 @@ def end_of(e):
     return e["end"] or e["start"]
 
 
-def choose_ephem(cluster):
+def choose_ephem(cluster, skip=()):
+    """Usable and recently ended ephemerides of one cluster, best first; `skip`: kinds never chosen (ephem_skip)."""
     usable, stale = [], []
     for r in cluster:
         for e in r["_eph"]:
-            if e["kind"] == "neocp_obs":
+            if e["kind"] == "neocp_obs" or e["kind"] in skip:
                 continue              # obs are tracklets, not an ephemeris on their own
             rank, cov, note = judge(e, r["src"] == "horizons")
             if rank is not None:
@@ -373,6 +374,7 @@ def build():
     dist, sweep = load_distances()
     verified_hz = {r["_hz"] for r in rows if r["src"] == "horizons" and r["_hz"]}
     out, used_cids = [], set()
+    skips = ephem_skips()
 
     for c in clusters:
         c.sort(key=lambda r: NAME_RANK.get(r["src"], 9))
@@ -398,8 +400,13 @@ def build():
         status, status_date = pick_status(c)
         obj_type, _ = vote(c, "obj_type", covers_bonus=False)
         el = pick_elements(c)
+        base = slug(name)
+        cid, k = base, 2
+        while cid in used_cids:
+            cid, k = f"{base}-{k}", k + 1
+        used_cids.add(cid)
 
-        picks, stale = choose_ephem(c)
+        picks, stale = choose_ephem(c, skips.get(cid, ()))
         end_d = pdate(status_date)
         if status in TERMINAL and end_d and end_d < W0:
             # Gone before the window opens: nothing can cover it; keep the sources for replay only.
@@ -473,11 +480,6 @@ def build():
         else:
             group = next((g for g, regs in GROUPS if regime in regs), "Other")
 
-        base = slug(name)
-        cid, k = base, 2
-        while cid in used_cids:
-            cid, k = f"{base}-{k}", k + 1
-        used_cids.add(cid)
         caveats = []
         if picks:
             k0, e0 = picks[0][3]["kind"], picks[0][3]
@@ -527,6 +529,17 @@ def build():
 
 
 # ----------------------------------------------------------------------------- overrides
+def ephem_skips():
+    """overrides.tsv rows with field ephem_skip: cid -> ephemeris kinds (comma list, e.g. horizons) never chosen for
+    that target, read before the merge: its primary / secondary ephemeris and caveat come from the next source."""
+    out = {}
+    for r in read_tsv(OVERRIDES) if OVERRIDES.exists() else ():
+        cid = (r.get("cid") or "").strip()
+        if cid and not cid.startswith("#") and (r.get("field") or "").strip() == "ephem_skip":
+            out.setdefault(cid, set()).update(k.strip() for k in r["value"].split(",") if k.strip())
+    return out
+
+
 def apply_overrides(objs):
     if not OVERRIDES.exists():
         OVERRIDES.write_text("cid\tfield\tvalue\treason\n")

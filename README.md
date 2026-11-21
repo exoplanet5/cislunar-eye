@@ -375,6 +375,11 @@ only by an explicit `make install-launchd` (copy to `~/Library/LaunchAgents` + `
   with only Sun/Earth/Moon as perturbers it omits the planets' pull on the object (about 2e-10 km/s², mostly Venus),
   which hpop's geocentric integration does not need. Before 2026-11-10 the track is a backward propagation of a
   3.4-day arc.
+- **Spektr-R follows the neocpsat find_orb fit, not Horizons** (`spektr-r  ephem_skip  horizons` in
+  `catalog/overrides.tsv`). Horizons -557 is built from TLEs and ends 2026-11-04. The object's plane has turned since
+  January (i 83° → 23°), so `../neocpsat/catalog.csv` fits it separately: the Nov 10–20 joint fit
+  `Spektr-R_combined_2026_11_10.html` (A11JwIW = A11Jzqh = A11K290 = C46UX71; e 0.870, perigee 23.3k km, apogee
+  336k km). The track is find_orb's and is extrapolated past the end of the arc.
 - **ESCAPADE Blue/Gold** have finished their SE-L2 loiter and are on the return leg to the November 2026 Earth flyby;
   they are relabelled `EARTH_NEAR_HELIO` (group "Earth-return / near-Earth heliocentric") in `catalog/overrides.tsv`.
 - **Chang'e-6 orbiter** is listed but not drawn: it manoeuvres, its 2026-10-01 page is 4 observations over 23 minutes

@@ -72,6 +72,25 @@ class JudgeTest(unittest.TestCase):
             self.assertTrue(1 < rank < 2, days)          # partial Horizons 1 < state vector < Bill Gray TLE 2
         self.assertIsNone(bm.judge({"kind": "statevec", "start": None, "end": None, "ref": "x.txt", "raw": ""}, False)[0])
 
+    def test_ephem_skip(self):
+        """overrides.tsv ephem_skip: the skipped kind is neither picked nor kept as stale; the next source leads."""
+        bm.set_now("2026-11-10")
+        hz = {"kind": "horizons", "start": None, "end": bm.W0 + timedelta(days=2), "ref": "-557", "raw": "horizons:-557"}
+        fit = {"kind": "neocpsat_fit", "start": bm.NOW - timedelta(days=1), "end": bm.NOW, "ref": "f.html", "raw": "neocpsat_fit:f"}
+        cluster = [{"src": "horizons", "_eph": [hz]}, {"src": "neocpsat", "_eph": [fit]}]
+        self.assertEqual([p[3]["kind"] for p in bm.choose_ephem(cluster)[0]], ["horizons", "neocpsat_fit"])
+        picks, stale = bm.choose_ephem(cluster, {"horizons"})
+        self.assertEqual(([p[3]["kind"] for p in picks], stale), (["neocpsat_fit"], []))
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "overrides.tsv"
+            f.write_text("cid\tfield\tvalue\treason\n# comment\t\t\t\nspektr-r\tephem_skip\thorizons, bgtle\tx\n"
+                         "spektr-r\ttier\t1\tx\n")
+            old, bm.OVERRIDES = bm.OVERRIDES, f
+            try:
+                self.assertEqual(bm.ephem_skips(), {"spektr-r": {"horizons", "bgtle"}})
+            finally:
+                bm.OVERRIDES = old
+
 
 class StatevecFilesTest(unittest.TestCase):
     def test_manual_rows_match_their_files(self):

@@ -532,6 +532,9 @@ StateTable
 **Overrides and joins**
 
 - `overrides.tsv` can force or forbid a source per object, e.g. preferring Bill Gray over a stale Horizons record.
+  Implemented: field `ephem_skip`, value a comma list of ephemeris kinds (`horizons`, `bgtle`, `spacetrack_gp`, …)
+  never chosen for that cid. `build_master.py` applies it before choosing the ephemerides, so the next source
+  becomes primary. Spektr-R skips `horizons` (2026-11-21).
 - A change of source between intervals always starts a new segment (`join_before=source`). The trail is broken there, and the size of the position jump is recorded and shown.
 
 ### 5.3 Horizons adapter (`src/cle/adapters/horizons.py`, adapted from MMX `ephemeris.py`)
