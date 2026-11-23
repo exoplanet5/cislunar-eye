@@ -135,7 +135,11 @@ def states(args, win, ctx) -> dict:
     from .adapters import primary
     rows = [r for r in catalog.targets(tiers=tuple(range(1, args.tier + 1))) if r["draw"] == "Y"]
     if args.only:
-        only = set(args.only.split(","))
+        only = {c.strip() for c in args.only.split(",") if c.strip()}
+        unknown = sorted(only - {r["cid"] for r in rows})
+        if unknown:                               # a typo must not pass as "0 targets" (make one T=...)
+            raise SystemExit(f"--only: {', '.join(unknown)}: not a drawn tier 1..{args.tier} target "
+                             "(cid, draw=Y in catalog/master_list.tsv)")
         rows = [r for r in rows if r["cid"] in only]
     if args.adapter:
         rows = [r for r in rows if adapter_of(r) == args.adapter]
@@ -143,6 +147,13 @@ def states(args, win, ctx) -> dict:
     this = [iso(win.t0_s), iso(win.t1_s)]
     report = load_json(BUILD / "states_report.json", {})
     report.setdefault("targets", {})
+    if args.only:                                 # the catalog step re-merges every target: name the ones it moved
+        moved = sorted(r["cid"] for r in catalog.targets(tiers=tuple(range(1, args.tier + 1))) if r["draw"] == "Y"
+                       and r["cid"] not in only and r["cid"] in report["targets"]
+                       and report["targets"][r["cid"]].get("primary", r.get("primary_ephem", "")) != r.get("primary_ephem", ""))
+        if moved:
+            print(f"note: the catalog now gives {', '.join(moved)} another ephemeris than they were built from; "
+                  "they keep the old one until rebuilt (add them to --only / T=, or make daily)", flush=True)
     gone = retire_excluded(report)
     if gone:
         print(f"retired {len(gone)} targets the viewer leaves out: {', '.join(gone)}", flush=True)

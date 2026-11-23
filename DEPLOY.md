@@ -34,6 +34,7 @@ A key is safer than a password in a file:
 ops/server/deploy.sh            # = all: sync, setup, build, restart the helper, install cron (first time; safe to repeat)
 ops/server/deploy.sh code       # after a code or catalog change: sync the project, build, restart the helper
 ops/server/deploy.sh refresh    # run the weekly job now, in the background
+ops/server/deploy.sh one change-6-orbiter spektr-r   # mirror ../neocpsat etc., then `make one` for these targets only
 ops/server/deploy.sh status     # helper, cron lines, latest logs, make status
 ops/server/deploy.sh ssh        # a shell in the server's project with its environment (HOME=BASE, venv, node, fo)
 ops/server/deploy.sh tles       # mirror ~/tles again after you edit tle_list.txt or add refits (sync copies it only once)
@@ -108,7 +109,9 @@ Tunnel + Cloudflare Access:
 - **Catalog edits.** A deploy copies this machine's `catalog/` over the server's. The next weekly run regenerates it,
   or run `deploy.sh refresh` to do that now.
 - **Inputs on the server can go stale.** `../neocpsat` and the other sibling inputs are copies. The server sees new
-  neocpsat MPECs, observations or wiki edits only after the next `deploy.sh sync` (or `all`/`code`).
+  neocpsat MPECs, observations or wiki edits only after the next `deploy.sh sync` (or `all`/`code`), or `deploy.sh one
+  <cid>`. That copies only the sibling inputs, then rebuilds just those targets in the server's last build window, in
+  about half a minute (log: `work/logs/one-<UTC date>.log`). A code or `catalog/overrides.tsv` change needs `code`.
 - **Window between runs.** The data window is ±15 d around the build. With a weekly build, the page has about 8 days
   of future coverage just before the next run.
 - **Your TLE edits.** The server's `tles/` started as a copy of `~/tles`, including your uncommitted

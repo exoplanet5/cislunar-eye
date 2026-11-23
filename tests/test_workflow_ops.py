@@ -32,13 +32,14 @@ WIN, OTHER = window(NOW), window("2026-10-22T13:00:00Z")
 NOT_RUN = "not drawn (adapter not run in this window)"
 
 
-def make_n(target, env_now):
-    """`make -n <target>` with CLE_NOW unset (None), empty or set; returns (output, echoed CLE_NOW values)."""
-    env = {k: v for k, v in os.environ.items() if k != "CLE_NOW"}
+def make_n(target, env_now, *args, check=True):
+    """`make -n <target> [VAR=x ..]` with CLE_NOW unset (None), empty or set; returns (output, echoed CLE_NOW values).
+    check=False: (CompletedProcess, []) whatever make's exit status."""
+    env = {k: v for k, v in os.environ.items() if k not in ("CLE_NOW", "MAKEFLAGS", "MAKELEVEL")}
     if env_now is not None:
         env["CLE_NOW"] = env_now
-    out = subprocess.run(["make", "-n", target], cwd=ROOT, env=env, capture_output=True, text=True, check=True).stdout
-    return out, re.findall(r'CLE_NOW=(\S*)"', out)
+    r = subprocess.run(["make", "-n", target, *args], cwd=ROOT, env=env, capture_output=True, text=True, check=check)
+    return (r.stdout, re.findall(r'CLE_NOW=(\S*)"', r.stdout)) if check else (r, [])
 
 
 def table(cid, win=None):
@@ -95,6 +96,41 @@ class MakeWindowTest(unittest.TestCase):
         out, _ = make_n("tles-status", NOW)
         self.assertIn("git -C", out)
 
+
+    def test_one_target_and_read_only_goals_keep_the_last_builds_window(self):
+        """make one T=cid: the window of build/states_report.json (STATES_REPORT) unless CLE_NOW is given, so export
+        still draws every other target (DW-02); offline extract + catalog, states --only T --fetch, then
+        export validate site sanity in a sub-make of the same window; no sweep, no bulk update-*, no tests."""
+        with tempfile.TemporaryDirectory() as d:
+            rep = Path(d) / "states_report.json"
+            rep.write_text(json.dumps({"now_utc": "2026-10-22T13:00:00Z"}))
+            for env_now, want in ((None, "2026-10-22T13:00:00Z"), ("", "2026-10-22T13:00:00Z"), (NOW, NOW)):
+                out, found = make_n("one", env_now, "T=spektr-r,dro-a", f"STATES_REPORT={rep}")
+                self.assertEqual(set(found), {want}, out)
+                steps = ["extract_all.py --offline", "build_master.py --now " + want[:10], "git diff --stat -- catalog/",
+                         "states --only spektr-r,dro-a --fetch", "cle.py export", "cle.py validate",
+                         "build_site.mjs", "sanity_check.py"]
+                at = [out.index(s) for s in steps]
+                self.assertEqual(at, sorted(at), out)
+                for never in ("horizons_sweep", "--adapter", "--refresh", "states --offline", "unittest", "browser.mjs", "prune.py"):
+                    self.assertNotIn(never, out)
+            for goals in (["build"], ["export", "validate", "site"], ["sanity"], ["build", "publish"]):   # read build/states only
+                _, found = make_n(goals[0], None, *goals[1:], f"STATES_REPORT={rep}")
+                self.assertEqual(set(found), {"2026-10-22T13:00:00Z"}, goals)     # not a new hour that draws nothing
+                _, found = make_n(goals[0], NOW, *goals[1:], f"STATES_REPORT={rep}")
+                self.assertEqual(set(found), {NOW}, goals)
+            for goals in (["states", "export"], ["all"], ["daily"]):              # these build states: a new window
+                _, found = make_n(goals[0], None, *goals[1:], f"STATES_REPORT={rep}")
+                self.assertNotIn("2026-10-22T13:00:00Z", found, goals)
+                self.assertEqual(len(set(found)), 1, goals)
+            _, found = make_n("build", None, f"STATES_REPORT={Path(d) / 'missing.json'}")   # no build yet: wall clock
+            self.assertRegex(found[0], r"^\d{4}-\d\d-\d\dT\d\d:00:00Z$")
+            r, _ = make_n("one", None, check=False)                       # no T: usage, nothing runs
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("usage: make one T=cid", r.stderr)
+            r, _ = make_n("one", None, "T=x", f"STATES_REPORT={Path(d) / 'missing.json'}", check=False)
+            self.assertNotEqual(r.returncode, 0)                           # no build yet: never a fresh-window page of one
+            self.assertIn("run make daily", r.stderr)
 
 class NotDrawnTest(unittest.TestCase):
     def test_missing_entry_or_other_window_is_not_drawn(self):
@@ -242,6 +278,17 @@ class StatesReportTest(unittest.TestCase):
                                        {"targets": {natural: {"status": "ok"}}})
             self.assertNotIn(natural, rep["targets"])
             self.assertIn("fake-bg", rep["targets"])
+
+    def test_only_names_drawn_targets(self):
+        """--only with a cid that is not a drawn target stops before anything is built (no silent "0 targets")."""
+        row = {"cid": "fake-bg", "draw": "Y", "primary_ephem": "bgtle:x.tle[2026-01-01..2026-12-31]", "norad": ""}
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(SystemExit) as e:
+                self.run_states(d, row, SimpleNamespace(only="fake-bg,spektr-x", adapter=None, tier=2, fetch=False), {})
+            self.assertIn("spektr-x", str(e.exception))
+            self.assertNotIn("fake-bg", str(e.exception))
+            rep, states = self.run_states(d, row, SimpleNamespace(only=" fake-bg ", adapter=None, tier=2, fetch=False), {})
+            self.assertEqual(rep["targets"]["fake-bg"]["status"], "ok")
 
     def test_failed_gp_fetch_is_recorded_and_the_run_continues(self):
         """DW-04(a): a Space-Track outage (CalledProcessError from the skill CLI) does not abort update-gp."""

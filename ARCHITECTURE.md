@@ -1222,6 +1222,7 @@ Each target is idempotent. Raw downloads go to fresh `work/cache/<source>/<stamp
 | `tles-status` | git fetch (read) | daily, non-fatal | reports `~/tles` HEAD against upstream; **never pulls** (that is your call) |
 | `states` | no | after any update | snapshots → `build/states/*.npz` + `.json` stamped with the window (`now_utc`, `t0_utc`, `t1_utc`); every `states_report.json` entry carries its `window`. `cle states --jobs N` (`CLE_JOBS`, default 8; review C2): gp / bgtle / extrap targets in N spawned worker processes (one `Context` each, longest previous build first), every fo / neocp target in order in one more worker, Horizons targets in the parent (one `Snapshots`: politeness, breaker, counters); each table is saved by the process that built it, the report only by the parent, which records `states_run {jobs, targets, wall_s}`; an entry's `seconds` is the target's own work and the time it queued on `work/fo.lock` behind another process's run is `lock_wait_s`, so the per-target numbers compare across `--jobs`; a worker that dies costs its target a rebuild in the parent; `--jobs 1` is the sequential catalog-order loop. The extrap start-state fit (AM5) is memoised in `work/cache/extrap/fits.json` under sha256(file) + epoch + state + span + step + nbody constants + `FIT_VERSION` (`CLE_REFRESH=1` refits; bump `extrap.FIT_VERSION` when the method changes) |
 | `build` | no | after states | `cle.export` → `dist/data/*.js` (draws only states of the current window); `node scripts/build_site.mjs` → `dist/index.html` |
+| `one` | the target's own adapter | by hand, after new inputs for a few targets | `T=cid[,cid]`: `extract --offline`, `catalog`, `cle states --only T --fetch`, then `export validate site sanity`, in the last build's window (below) |
 | `test` / `test-browser` / `sanity` | no | each build | §14; `tests/data_contract.test.mjs` checks the `cle/*@1` fields the page reads |
 | `status` | git (read) | any time | `scripts/status.py`: ages of the NEOCP snapshot, Horizons/GP/fo stamps, master list, `~/tles`, last logs; exit 1 when the NEOCP snapshot > 3 h or the last daily > 36 h old or failed |
 | `open` | no | — | `open dist/index.html` |
@@ -1230,7 +1231,8 @@ Each target is idempotent. Raw downloads go to fresh `work/cache/<source>/<stamp
 | `daily` | yes | daily | `neocp-live extract sweep catalog update-horizons update-gp tles-status update-fits states export validate site test sanity test-browser`, then `prune.py --apply` (non-fatal) |
 
 **One window per make.** `CLE_NOW` is fixed once at the top of the Makefile (the environment's value, else the wall
-clock floored to the hour) and exported to every step; each target echoes it. The export draws a target only from a
+clock floored to the hour; for a goal list that only reads `build/states`, i.e. `one export validate site build sanity
+test-browser publish open`, the `now_utc` of `build/states_report.json`) and exported to every step; each target echoes it. The export draws a target only from a
 `states_report.json` entry and a states file of the current window; anything else is "not drawn (adapter not run in
 this window)".
 

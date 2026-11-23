@@ -2,12 +2,34 @@
 #   make daily            network refresh + offline rebuild + tests   (unattended: ops/run.sh daily)
 #   make build            offline: dist/data/*.js + dist/index.html
 #   CLE_NOW=2026-10-21T13:00:00Z make states export validate
-# One make = one window: CLE_NOW is fixed once here (wall clock floored to the hour when unset or empty, DW-01) and
-# exported to every step; each target echoes it. NEOCP objects are not scheduled: the viewer requests them one
+#   make one T=spektr-r   these targets only (cid[,cid]), rebuilt inside the last build's window; the rest stay as built
+# One make = one window: CLE_NOW is fixed once here (wall clock floored to the hour when unset or empty, DW-01; the
+# last build's window for goals that only read build/states, see PINNED) and exported to every step; each target echoes it. NEOCP objects are not scheduled: the viewer requests them one
 # designation at a time; `make neocp-live` is a manual refresh of the catalog source neocp.tsv only.
 PY    ?= $(HOME)/.venvs/astro313/bin/python
 NODE  ?= node
 CLE   := $(PY) -I scripts/cle.py
+# Goals that only read build/states (one rebuilds just T first) take the window of the last states run
+# (build/states_report.json now_utc) when CLE_NOW is unset: export draws only targets built in its own window (DW-02),
+# so `make build` an hour after a build would otherwise draw none of them. Any goal list with states, all, daily ... is
+# a new window as before.
+STATES_REPORT ?= build/states_report.json
+PINNED := one export validate site build sanity test-browser publish open
+ifneq ($(filter one,$(MAKECMDGOALS)),)
+ifeq ($(strip $(T)),)
+$(error usage: make one T=cid[,cid]  (cids: the first column of catalog/master_list.tsv))
+endif
+endif
+ifeq ($(strip $(CLE_NOW)),)
+ifneq ($(strip $(MAKECMDGOALS)),)
+ifeq ($(filter-out $(PINNED),$(MAKECMDGOALS)),)
+CLE_NOW := $(shell $(PY) -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["now_utc"])' $(STATES_REPORT) 2>/dev/null)
+ifeq ($(strip $(CLE_NOW))$(filter one,$(MAKECMDGOALS)),one)
+$(error make one: no window in $(STATES_REPORT); run make daily (or make all) first)
+endif
+endif
+endif
+endif
 ifeq ($(strip $(CLE_NOW)),)
 CLE_NOW := $(shell date -u +%Y-%m-%dT%H:00:00Z)
 endif
@@ -27,7 +49,7 @@ LEGACY  := com.cislunar-eye.neocp
 
 .PHONY: now setup extract sweep catalog neocp-live update-horizons update-gp update-fits tles-status \
         states export validate site build test fixture test-browser sanity status open serve publish install-launchd uninstall-launchd \
-        prune prune-apply all daily weekly
+        prune prune-apply all daily weekly one
 
 now:
 	$(NOW)
@@ -142,6 +164,15 @@ uninstall-launchd:                    # unload the agents (and the legacy hourly
 	for a in $(AGENTS) $(LEGACY); do launchctl bootout gui/$$(id -u)/$$a 2>/dev/null; rm -f $(LAUNCHD)/$$a.plist; done
 
 all: states export validate site     # then: make test test-browser sanity
+
+# one: new inputs offline (extract --offline + catalog), then only T's states, online for its own adapter (Horizons
+# re-probes the solution once the cached probe is > 20 h old, --fetch pulls its Space-Track GP set, find_orb refits),
+# then export validate site sanity; the other targets keep their states (a note names those the catalog moved)
+one: EXTRACT_FLAGS = --offline
+one: extract catalog
+	$(NOW)
+	$(CLE) states --only $(T) --fetch
+	$(MAKE) --no-print-directory export validate site sanity
 
 weekly: neocp-live daily              # the LAN server's weekly job (ops/server/weekly.sh): NEOCP catalog source, then the full refresh
 

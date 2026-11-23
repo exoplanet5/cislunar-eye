@@ -1,5 +1,5 @@
 #!/bin/bash
-# ops/server/deploy.sh [all|code|sync|setup|build|helper|cron|refresh|status|ssh]: run cislunar-eye on a LAN Mac.
+# ops/server/deploy.sh [all|code|sync|setup|build|helper|cron|refresh|one|status|ssh]: run cislunar-eye on a LAN Mac.
 # Run it on the dev machine. On the server everything goes under BASE (default /Users/<user>/mickey), and every job
 # there runs with HOME=BASE (ops/server/env.sh):
 #   BASE/cislunar-eye                  this project: the files git tracks or would track, .git, work/cache (copied once;
@@ -19,6 +19,8 @@
 #            the server's ops/server/local.env; "allow none" clears them, "allow" alone shows them); restarts it
 #   tles     mirror ~/tles again (after you edit tle_list.txt or add refits here; sync copies it only the first time)
 #   refresh  start ops/server/weekly.sh on the server now, in the background (log: work/logs/weekly-<date>.log)
+#   one CID[,CID]   mirror the sibling inputs (../neocpsat ...), then `ops/run.sh one T=CID` there: only these
+#            targets, in the server's last build window (log: work/logs/one-<date>.log; a code change needs `code`)
 #   status   helper, crontab lines, last pipeline logs, make status
 #   ssh      a shell in the project with the server environment
 # Env: CLE_SERVER_BASE, CLE_BILLGRAY_SRC (~/Desktop/billgray), CLE_PORT (8765), CLE_WEEKLY (cron fields, "30 4 * * 1").
@@ -59,12 +61,7 @@ sync() {
   echo "  project: $(cd "$ROOT" && git ls-files -co --exclude-standard | wc -l | tr -d ' ') files + .git"
   rsync_ --ignore-existing "$ROOT/work/cache/" "$SERVER:$DEST/work/cache/"
   echo "  work/cache ($(du -sh "$ROOT/work/cache" | cut -f1); existing server files kept)"
-  for d in neocpsat highartsat rocketdebris lunarmission hpop; do
-    if [ -d "$PARENT/$d" ]; then
-      rsync_ --delete --exclude .git --exclude __pycache__ --exclude .DS_Store "$PARENT/$d/" "$SERVER:$BASE/$d/"
-      echo "  ../$d"
-    else echo "  ../$d: not found here, skipped"; fi
-  done
+  siblings
   for d in lunar jpl_eph sat_code find_orb; do
     rsync_ --exclude .git --exclude '*.o' --exclude '*.a' --exclude prefix.h --exclude PREFIX \
       "$BILLGRAY/$d/" "$SERVER:$BASE/opt/billgray/src/$d/"
@@ -79,6 +76,15 @@ sync() {
     on "umask 077; cat > '$BASE/.config/space-track/credentials.json'" < "$HOME/.config/space-track/credentials.json"
     echo "  Space-Track credentials (mode 600)"
   fi
+}
+
+siblings() {                          # the read-only sibling inputs, mirrored from ../ (new observations land here)
+  for d in neocpsat highartsat rocketdebris lunarmission hpop; do
+    if [ -d "$PARENT/$d" ]; then
+      rsync_ --delete --exclude .git --exclude __pycache__ --exclude .DS_Store "$PARENT/$d/" "$SERVER:$BASE/$d/"
+      echo "  ../$d"
+    else echo "  ../$d: not found here, skipped"; fi
+  done
 }
 
 tles() {                              # mirror ~/tles (its .git and your local edits); weekly.sh pulls on top
@@ -111,6 +117,10 @@ case ${1:-all} in
   allow)   shift; allow "$@" ;;
   setup)   remote setup.sh ;;
   build)   build ;;
+  one)     shift; cids=$(echo "$*" | tr ' ' ,)
+           case $cids in ''|*[!a-z0-9,-]*) echo "deploy: one CID[,CID] (cids from catalog/master_list.tsv)" >&2; exit 2 ;; esac
+           say "one $cids"; siblings
+           on "/bin/bash -c '. $DEST/ops/server/env.sh && cd $DEST && ops/run.sh one T=$cids; rc=\$?; tail -6 work/logs/one-\$(date -u +%Y-%m-%d).log; exit \$rc'" ;;
   helper)  remote "helper.sh restart" ;;
   cron)    remote "cron.sh install" ;;
   refresh) on "nohup /bin/bash $DEST/ops/server/weekly.sh >/dev/null 2>&1 < /dev/null &"

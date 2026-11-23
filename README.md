@@ -287,6 +287,7 @@ runs combine only when they pass the same `CLE_NOW`.
 | `status` | git (read) | `scripts/status.py`: ages of the Horizons/GP/fo stamps, master list, `~/tles` HEAD, last daily log; exit 1 when the last daily is > 36 h old (or failed) |
 | `install-launchd` / `uninstall-launchd` | no | opt-in: copy the `ops/launchd` template (daily) to `~/Library/LaunchAgents` and load it / unload and remove it, plus the retired hourly `com.cislunar-eye.neocp` agent if a machine still has it; never run by `setup` or `daily` |
 | `prune` / `prune-apply` | no | `scripts/prune.py`: dry run / apply. `work/cache/fo` keeps the stamps `build/` references plus the previous one per fit; in kept stamps the other run directories (one-day chunks, legs, probes, rejected candidates) are trimmed to `obs.txt`, `elements.txt`, `command.json`, `fo_stdout.txt` and a gzipped `ephem.txt`; every other stamp is deleted. `work/cache/horizons_eph` keeps the referenced stamps plus the two newest. Stamps younger than 1 h are left alone; refuses while another run holds `work/make.lock` or `work/fo.lock` |
+| `one` | its own adapter only | `make one T=cid[,cid]`: `extract --offline`, `catalog`, `states --only T --fetch` (Horizons re-probes the solution once the cached probe is > 20 h old; `--fetch` pulls its Space-Track set; find_orb refits), then `export validate site sanity`, all in the last build's window (`now_utc` of `build/states_report.json`; `CLE_NOW=` overrides), so every other target stays drawn as built. ≈ 20–30 s (3 targets, 21 s on 2026-11-23) instead of the daily's ≈ 40 min. A cid that is not a drawn target stops it; a note names other targets whose ephemeris the catalog step changed (they keep their old states until rebuilt). `ops/run.sh one T=...` takes the lock and logs to `work/logs/one-<date>.log` |
 | `daily` | yes | `extract sweep catalog update-horizons update-gp tles-status update-fits states export validate site test sanity test-browser`, then `prune-apply` (non-fatal) |
 
 A full offline rebuild for the 2026-10-22T12:00Z window:
@@ -321,7 +322,12 @@ it repeats to ≈ 0.05 km, and the NEOCP-class fits stay bitwise identical betwe
 - Weekly: the daily's `sweep` step re-probes Horizons once the audit table is more than 7 d old (`make sweep FORCE=1`
   by hand).
 - By hand: a new state vector replaces its file in `catalog/statevec/`. Set the matching `[date..date]` in
-  `catalog/sources/manual.tsv` (a test checks it), then run `make catalog states export site` or wait for the daily. After `../neocpsat` changes: `make update-fits` (the daily runs it when `scripts/fits_changed.py` says so).
+  `catalog/sources/manual.tsv` (a test checks it), then `make one T=<cid>` or wait for the daily. After `../neocpsat`
+  changes (a new MPEC, observations): `make one T=<cid>[,<cid>]` for the targets it touched (the daily runs
+  `update-fits` when `scripts/fits_changed.py` says so).
+- One window per build: goals that only read `build/states` (`export validate site build sanity test-browser publish
+  open`, and `one`) take the last build's window when `CLE_NOW` is unset. Before 2026-11-23 they took the wall-clock
+  hour, so a `make build` an hour after a build drew none of the targets.
 - The page warns when its data window is about to end (the banner strip above the scene). A requested NEOCP object is
   fitted inside the build's window, so new NEOCP objects need a current build too.
 - Nothing here pushes, deploys or writes to sibling projects.
