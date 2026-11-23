@@ -925,8 +925,10 @@ For each observation (80-column line):
 - **Cap:** 40 visible labels (16 on a phone); Lagrange keys are outside the cap.
 - **Markers stay visible:** every on-screen marker reserves an 8 px soft box. An ordinary label that finds no clear
   offset is dropped; an always-on label (Earth, the Moon, the frame's own L points, focus, selection) tries a second ring
-  of offsets and is then forced to the one that covers the fewest boxes, never over the hard boxes (title, legend, chips,
-  scale bar, Sun indicator, edge chevrons).
+  of offsets and is then forced to the offset that hides the fewest marker centres. Ties go to the one with the fewest
+  centres within 3 px of its edge, then to the one touching the fewest boxes. It is never forced over the hard boxes
+  (title, legend, chips, scale bar, Sun indicator, edge chevrons). On the phone, Earth's HEO swarm makes every offset
+  collide: before 2026-11-24, fewest boxes put the Earth label over a marker at about 1 epoch in 240.
 - **Collisions:** a screen grid hash replaces the O(N²) `occupied.some` loop (`app.js:378`). Sizes are cached once; this also fixes the `sky.js:96-97` layout thrash.
 - **Occlusion:** labels are hidden behind Earth **and the Moon**. MMX checks Earth only (`app.js:367-370`).
 - **Sky labels** are placed after body labels and always yield to them.

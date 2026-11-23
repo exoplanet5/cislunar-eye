@@ -1,7 +1,7 @@
 // DOM labels with priority, a cap and a screen grid hash (ARCHITECTURE §9.5; replaces MMX's O(N²) occupied.some).
 export class Occupancy {
-  constructor(cell = 48) { this.cell = cell; this.map = new Map(); this.hard = []; }
-  clear() { this.map.clear(); this.hard = []; }
+  constructor(cell = 48) { this.cell = cell; this.map = new Map(); this.hard = []; this.marks = []; }
+  clear() { this.map.clear(); this.hard = []; this.marks = []; }
   *cells(b, pad) {
     const c = this.cell, x0 = Math.floor((b.x - pad) / c), x1 = Math.floor((b.x + b.width + pad) / c);
     const y0 = Math.floor((b.y - pad) / c), y1 = Math.floor((b.y + b.height + pad) / c);
@@ -9,6 +9,15 @@ export class Occupancy {
   }
   // hard boxes (title, legend, credit, banner, Sun glyph) are never covered, not even by always-on labels
   add(b, hard = false) { if (hard) this.hard.push(b); for (const k of this.cells(b, 0)) { let l = this.map.get(k); if (!l) this.map.set(k, l = []); l.push(b); } }
+  // an on-screen marker: a soft 2r box (collides, hits) whose centre a forced label must not cover (covers)
+  mark(x, y, r = 4) { this.marks.push([x, y]); this.add({ x: x - r, y: y - r, width: 2 * r, height: 2 * r }); }
+  // markers whose centre lies inside b grown by `grow` px (0: under the label; the drawn label is b rounded to whole px,
+  // ≤ 1 px wider, so a centre outside b is never more than 1 px inside it)
+  covers(b, grow = 0) {
+    let n = 0;
+    for (const [x, y] of this.marks) if (x > b.x - grow && x < b.x + b.width + grow && y > b.y - grow && y < b.y + b.height + grow) n++;
+    return n;
+  }
   collidesHard(b) { return this.hard.some(r => b.x < r.x + r.width && b.x + b.width > r.x && b.y < r.y + r.height && b.y + b.height > r.y); }
   // number of placed boxes b touches (no padding): the cost of forcing an always-on label there
   hits(b) {
@@ -62,10 +71,13 @@ export class Labels {
         if (b.y < 4 || b.y + height > h - 4) continue;
         if (!occupied.collides(b)) { box = b; break; }
       }
-      if (!box && c.always) {                          // forced: the offset that covers the fewest markers and labels
+      // forced: the offset that hides the fewest marker centres, then sits closest to the fewest, then touches the fewest
+      // boxes (a 2.5-px Earth in the phone's HEO swarm: every ring collides, yet one leaves every marker visible)
+      if (!box && c.always) {
         let best = Infinity;
         for (const [dx, dy] of offsets) {
-          const b = { x: Math.max(4, Math.min(w - width - 4, c.x + dx)), y: c.y + dy, width, height }, n = occupied.hits(b);
+          const b = { x: Math.max(4, Math.min(w - width - 4, c.x + dx)), y: c.y + dy, width, height };
+          const n = occupied.covers(b) * 1e6 + occupied.covers(b, 3) * 1e3 + occupied.hits(b);
           if (b.y >= 4 && b.y + height <= h - 4 && n < best && !occupied.collidesHard(b)) { best = n; box = b; }
         }
       }

@@ -32,6 +32,22 @@ test('an ordinary label in a crowd is dropped; an always-on one moves to the off
   assert.ok(covered.length <= 1 && forcedAtFirst > covered.length, `placed at ${p}, covers ${JSON.stringify(covered)} (first offset would touch ${forcedAtFirst})`);
 });
 
+test('a forced always-on label leaves every marker centre visible when one offset does, even touching more dots', () => {
+  // one marker centred in each of the 18 offsets (r = 0, 40×14 at 100,100) but the near-left-low one (51..91, 104..118),
+  // whose only neighbours are two dots on its left and right edges: fewest boxes would pick the first offset (one dot,
+  // its centre under the label); fewest hidden centres picks the edge-touched one
+  const pts = [[129, 93], [129, 111], [71, 93], [129, 79], [129, 125], [71, 79], [71, 125], [100, 77], [100, 127], [100, 61],
+    [100, 143], [144, 63], [144, 141], [56, 63], [56, 141], [100, 45], [100, 159], [49, 111], [93, 111]];
+  const L = new Labels(layer), occ = new Occupancy();
+  for (const [x, y] of pts) occ.mark(x, y);
+  assert.equal(occ.hits({ x: 109, y: 86, width: 40, height: 14 }), 1);
+  assert.equal(occ.hits({ x: 51, y: 104, width: 40, height: 14 }), 2);
+  L.place([{ key: 'earth', text: 'Earth', x: 100, y: 100, priority: 950, always: true }], 800, 600, occ);
+  const p = at(L.items.get('earth').el);
+  assert.deepEqual(p, [51, 104]);
+  assert.deepEqual(pts.filter(q => inside(q, p)), []);
+});
+
 test('hard boxes are never covered, not even by a forced label', () => {
   const L = new Labels(layer), occ = new Occupancy();
   occ.add({ x: 0, y: 0, width: 800, height: 120 }, true);

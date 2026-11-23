@@ -382,7 +382,7 @@ function positionLabels() {
   occupancy.add(sun, true);
   for (const b of edgeMarkers(w, h, [sun, ...marks])) occupancy.add(b, true);
   // Labels never cover another marker: a soft 8 px box per on-screen marker (own marker clears the 9 px offsets).
-  const dot = s => s && occupancy.add({ x: s.x - 4, y: s.y - 4, width: 8, height: 8 });
+  const dot = s => s && occupancy.mark(s.x, s.y);
   for (const T of W.targets) dot(T.screen);
   lagrange.scene.forEach((p, i) => lagrange.shown[i] && dot(project(p, w, h)));
   // Lagrange labels (short keys) sit outside the 40-label cap; the frame's own system (SE or EM) is always labelled.
